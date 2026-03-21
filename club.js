@@ -140,7 +140,8 @@ async function loadAllClubStudents() {
     else Utils.toast(`✅ โหลดรายชื่อสำเร็จทั้ง ${successCount} ชั้น`);
 
     _renderClubMain();
-  } catch(e) { Utils.toast(e.message, 'error'); Utils.hideLoading(); }
+  } catch(e) { Utils.toast(e.message, 'error'); }
+  Utils.hideLoading();
 }
 
 // ── โหลดข้อมูลชุมนุมที่บันทึกไว้ (เรียกอัตโนมัติตอนเปิดหน้า) ──────
