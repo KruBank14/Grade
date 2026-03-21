@@ -580,6 +580,71 @@ body{
 .btn-add-sub:hover{
   background:#ede9fe;
 }
+.unit-tab-wrap{
+  overflow-x:auto;
+  margin-bottom:10px;
+  padding-bottom:2px;
+}
+.unit-tabs{
+  display:flex;
+  gap:8px;
+  flex-wrap:nowrap;
+  min-width:max-content;
+}
+.unit-tab{
+  border:none;
+  border-radius:10px;
+  padding:8px 14px;
+  font-family:inherit;
+  font-weight:700;
+  font-size:.84rem;
+  cursor:pointer;
+  background:#eef2ff;
+  color:#4338ca;
+  border:1.5px solid #c7d2fe;
+  transition:all .15s;
+  white-space:nowrap;
+}
+.unit-tab:hover{
+  background:#e0e7ff;
+}
+.unit-tab.active{
+  background:linear-gradient(135deg,#7c3aed,#5b21b6);
+  color:#fff;
+  border-color:transparent;
+  box-shadow:0 4px 12px rgba(124,58,237,.22);
+}
+.unit-editor-card{
+  background:#fff;
+  border:1px solid #ddd6fe;
+  border-radius:14px;
+  padding:14px;
+  margin-bottom:10px;
+}
+.unit-editor-head{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+  margin-bottom:10px;
+}
+.unit-item-row{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+  margin-bottom:8px;
+}
+.unit-empty{
+  border:1.5px dashed #c4b5fd;
+  border-radius:12px;
+  padding:20px;
+  text-align:center;
+  color:#7c3aed;
+  background:#faf5ff;
+  font-weight:700;
+  margin-bottom:10px;
+}
 .raw-preview{
   display:flex;
   align-items:center;
@@ -1650,7 +1715,13 @@ body{
         <span>/</span>
         <span class="res">50</span>
       </div>
-      <div class="sub-list" id="subList_1"></div>
+
+      <div class="unit-tab-wrap">
+        <div class="unit-tabs" id="unitTabs_1"></div>
+      </div>
+
+      <div id="unitEditor_1"></div>
+
       <button class="btn-add-sub" onclick="addSub(1)">＋ เพิ่มหน่วยการเรียนรู้ เทอม 1</button>
     </div>
 
@@ -1661,7 +1732,13 @@ body{
         <span>/</span>
         <span class="res">50</span>
       </div>
-      <div class="sub-list" id="subList_2"></div>
+
+      <div class="unit-tab-wrap">
+        <div class="unit-tabs" id="unitTabs_2"></div>
+      </div>
+
+      <div id="unitEditor_2"></div>
+
       <button class="btn-add-sub" onclick="addSub(2)">＋ เพิ่มหน่วยการเรียนรู้ เทอม 2</button>
     </div>
 
