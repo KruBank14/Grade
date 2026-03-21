@@ -1299,6 +1299,26 @@ body{
 .indicator-badge{display:inline-flex;align-items:center;gap:4px;padding:4px 9px;border-radius:999px;font-size:.74rem;font-weight:700;}
 .indicator-badge.formative{background:#dbeafe;color:#1d4ed8;}
 .indicator-badge.summative{background:#fef3c7;color:#b45309;}
+.coverage-card{background:#f8fafc;border:1px solid #dbeafe;border-radius:14px;padding:12px 14px;margin-bottom:14px;}
+.coverage-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;}
+.coverage-title{font-weight:800;font-size:.88rem;color:#1e3a8a;}
+.coverage-stats{display:flex;gap:8px;flex-wrap:wrap;}
+.coverage-stat{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;font-size:.76rem;font-weight:800;}
+.coverage-stat.total{background:#e0f2fe;color:#075985;}
+.coverage-stat.used{background:#dcfce7;color:#166534;}
+.coverage-stat.unused{background:#fee2e2;color:#991b1b;}
+.coverage-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;}
+.coverage-col{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:10px 12px;}
+.coverage-col-title{font-weight:800;font-size:.82rem;margin-bottom:8px;}
+.coverage-col-title.ok{color:#166534;}
+.coverage-col-title.warn{color:#b91c1c;}
+.coverage-list{display:flex;flex-direction:column;gap:8px;max-height:240px;overflow:auto;padding-right:2px;}
+.coverage-item{border:1px solid #e5e7eb;border-radius:10px;padding:8px 9px;background:#fff;}
+.coverage-item-top{font-size:.8rem;line-height:1.45;color:#334155;}
+.coverage-item-top strong{margin-right:4px;}
+.coverage-links{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px;}
+.coverage-link{display:inline-flex;align-items:center;padding:3px 8px;border-radius:999px;background:#eef2ff;color:#4338ca;font-size:.72rem;font-weight:700;}
+.coverage-empty{border:1px dashed #cbd5e1;border-radius:10px;padding:12px;text-align:center;color:#64748b;background:#f8fafc;font-size:.8rem;}
 @media (max-width:600px){
   .sub-row{flex-wrap:wrap;gap:6px;}
   .sub-name{width:100%;flex:none;}
@@ -1733,6 +1753,8 @@ body{
       <button class="ttab on" onclick="switchTerm(1,this)">เทอม 1</button>
       <button class="ttab" id="tabTerm2Btn" onclick="switchTerm(2,this)">เทอม 2</button>
     </div>
+
+    <div id="indicatorCoverageGlobal" class="coverage-card"></div>
 
     <div id="subPanel_1">
       <div class="raw-preview mb-2">
