@@ -67,36 +67,114 @@ function switchTerm(t, btn) {
   $('subPanel_1').style.display = t === 1 ? '' : 'none'; $('subPanel_2').style.display = t === 2 ? '' : 'none';
 }
 
-function addSub(t) { App.units[t].push({ name: `หน่วยที่ ${App.units[t].length + 1}`, max: 10, items: [{ name: "งาน 1", max: 10 }] }); renderSubList(t); }
-function rmSub(t, ui) { if (confirm(`ลบ "${App.units[t][ui].name}" ?`)) { App.units[t].splice(ui, 1); renderSubList(t); } }
-function addSubItem(t, ui) { App.units[t][ui].items.push({ name: `งาน ${App.units[t][ui].items.length + 1}`, max: 10 }); renderSubList(t); }
-function rmSubItem(t, ui, ii) { if (confirm('ลบงานนี้?')) { App.units[t][ui].items.splice(ii, 1); renderSubList(t); } }
+function setActiveUnitTab(t, idx) {
+  App.activeUnitTab[t] = idx;
+  renderSubList(t);
+}
+
+function addSub(t) {
+  App.units[t].push({
+    name: `หน่วยที่ ${App.units[t].length + 1}`,
+    max: 10,
+    items: [{ name: "งาน 1", max: 10 }]
+  });
+  App.activeUnitTab[t] = App.units[t].length - 1;
+  renderSubList(t);
+}
+
+function rmSub(t, ui) {
+  if (!confirm(`ลบ "${App.units[t][ui].name}" ?`)) return;
+  App.units[t].splice(ui, 1);
+  if (App.activeUnitTab[t] >= App.units[t].length) {
+    App.activeUnitTab[t] = Math.max(0, App.units[t].length - 1);
+  }
+  renderSubList(t);
+}
+
+function addSubItem(t, ui) {
+  App.units[t][ui].items.push({
+    name: `งาน ${App.units[t][ui].items.length + 1}`,
+    max: 10
+  });
+  renderSubList(t);
+}
+
+function rmSubItem(t, ui, ii) {
+  if (!confirm('ลบงานนี้?')) return;
+  App.units[t][ui].items.splice(ii, 1);
+  renderSubList(t);
+}
+
+function renderUnitTabs(t) {
+  const wrap = $(`unitTabs_${t}`);
+  if (!wrap) return;
+
+  const units = App.units[t] || [];
+  if (!units.length) {
+    wrap.innerHTML = '';
+    return;
+  }
+
+  wrap.innerHTML = units.map((u, i) => `
+    <button type="button" class="unit-tab ${App.activeUnitTab[t] === i ? 'active' : ''}" onclick="setActiveUnitTab(${t}, ${i})">
+      ${u.name || `หน่วย ${i + 1}`}
+    </button>
+  `).join('');
+}
+
+function renderUnitEditor(t) {
+  const wrap = $(`unitEditor_${t}`);
+  if (!wrap) return;
+
+  const units = App.units[t] || [];
+  if (!units.length) {
+    wrap.innerHTML = `<div class="unit-empty">ยังไม่มีหน่วยการเรียนรู้</div>`;
+    return;
+  }
+
+  if (App.activeUnitTab[t] >= units.length) App.activeUnitTab[t] = units.length - 1;
+  if (App.activeUnitTab[t] < 0) App.activeUnitTab[t] = 0;
+
+  const ui = App.activeUnitTab[t];
+  const unit = units[ui];
+
+  wrap.innerHTML = `
+    <div class="unit-editor-card">
+      <div class="unit-editor-head">
+        <span class="sub-n">${ui + 1}.</span>
+        <input class="sub-name" type="text" value="${unit.name || ''}" placeholder="ชื่อหน่วย" onchange="App.units[${t}][${ui}].name=this.value;renderSubList(${t});">
+        <span class="sub-max-lbl">คะแนนเต็ม</span>
+        <input class="sub-max" type="number" min="1" value="${Number(unit.max) || 0}" onchange="App.units[${t}][${ui}].max=Number(this.value)||0;updateAutoScoreDisplay();renderSubList(${t});">
+        <button class="btn-rm" onclick="rmSub(${t}, ${ui})">✕</button>
+      </div>
+
+      <div class="d-flex flex-column gap-2">
+        ${(unit.items || []).map((item, ii) => `
+          <div class="unit-item-row">
+            <input class="sub-name" type="text" value="${item.name || ''}" placeholder="ชื่องาน" onchange="App.units[${t}][${ui}].items[${ii}].name=this.value">
+            <span class="sub-max-lbl">เต็ม</span>
+            <input class="sub-max" type="number" min="1" value="${Number(item.max) || 0}" onchange="App.units[${t}][${ui}].items[${ii}].max=Number(this.value)||0;renderSubList(${t});">
+            <button class="btn-rm" onclick="rmSubItem(${t}, ${ui}, ${ii})">✕</button>
+          </div>
+        `).join('')}
+      </div>
+
+      <button type="button" class="btn-add-sub mt-2" onclick="addSubItem(${t}, ${ui})">＋ เพิ่มงาน</button>
+
+      <div class="raw-preview mt-2">คะแนนดิบรวมของงาน: <strong>${ScoreLogic.getUnitRawMax(t, ui)}</strong> | คะแนนที่เก็บเข้าหน่วย: <strong class="res">${Number(unit.max) || 0}</strong></div>
+    </div>
+  `;
+}
 
 function renderSubList(t) {
-  const wrap = $(`subList_${t}`); if (!wrap) return;
-  if (!App.units[t].length) { wrap.innerHTML = `<div class="text-muted text-center py-3 border rounded">ยังไม่มีหน่วยการเรียนรู้</div>`; updateAutoScoreDisplay(); return; }
-  
-  wrap.innerHTML = App.units[t].map((unit, ui) => {
-    return `<div class="sub-row mb-2 p-3 border rounded bg-white" style="display:block;">
-      <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
-        <span class="sub-n">${ui + 1}.</span>
-        <input class="sub-name" type="text" value="${unit.name || ''}" placeholder="ชื่อหน่วย" onchange="App.units[${t}][${ui}].name=this.value">
-        <span class="sub-max-lbl">คะแนนเต็ม</span>
-        <input class="sub-max" type="number" min="1" value="${Number(unit.max)||0}" onchange="App.units[${t}][${ui}].max=Number(this.value)||0;updateAutoScoreDisplay();renderSubList(${t});">
-        <button class="btn-rm" onclick="rmSub(${t},${ui})">✕</button>
-      </div>
-      <div class="ms-4 d-flex flex-column gap-2">
-        ${(unit.items ||[]).map((item, ii) => `<div class="d-flex align-items-center gap-2 flex-wrap">
-          <input class="sub-name" type="text" value="${item.name || ''}" placeholder="ชื่องาน" onchange="App.units[${t}][${ui}].items[${ii}].name=this.value">
-          <span class="sub-max-lbl">เต็ม</span>
-          <input class="sub-max" type="number" min="1" value="${Number(item.max)||0}" onchange="App.units[${t}][${ui}].items[${ii}].max=Number(this.value)||0;renderSubList(${t});">
-          <button class="btn-rm" onclick="rmSubItem(${t},${ui},${ii})">✕</button>
-        </div>`).join('')}
-        <button type="button" class="btn-add-sub" onclick="addSubItem(${t},${ui})">＋ เพิ่มงาน</button>
-      </div>
-      <div class="raw-preview mt-2">คะแนนดิบรวมของงาน: <strong>${ScoreLogic.getUnitRawMax(t, ui)}</strong> | คะแนนที่เก็บเข้าหน่วย: <strong class="res">${Number(unit.max)||0}</strong></div>
-    </div>`;
-  }).join('');
+  if (!Array.isArray(App.units[t])) App.units[t] = [];
+  if (App.activeUnitTab[t] == null) App.activeUnitTab[t] = 0;
+  if (App.activeUnitTab[t] >= App.units[t].length) {
+    App.activeUnitTab[t] = Math.max(0, App.units[t].length - 1);
+  }
+
+  renderUnitTabs(t);
+  renderUnitEditor(t);
   updateAutoScoreDisplay();
 }
 
@@ -139,6 +217,8 @@ App.courseInfo = res.config?.courseInfo || {};
     }
     App.units[1] = res.config?.units?.t1 || res.config?.subItems?.t1 || [];
     if (!App.isSemMode) App.units[2] = res.config?.units?.t2 || res.config?.subItems?.t2 ||[];
+
+    App.activeUnitTab = { 1: 0, 2: 0 };
 
     normalizeUnits(1); normalizeUnits(2); renderSubList(1); if (!App.isSemMode) renderSubList(2);
     refreshUnitPanelLabels(); updateAutoScoreDisplay();
