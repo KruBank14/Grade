@@ -108,6 +108,8 @@ function api(action, data = {}) {
     'saveRTW',
     'saveGuidance',
     'saveScout',
+      'saveClub',        
+
     'saveTeacherAssignments',
     'saveSchoolProfile',
     'setupGradeYear'
