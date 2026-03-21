@@ -4,7 +4,7 @@
 // =====================================================
 
 const CONFIG = {
-  WEB_APP_URL: "https://script.google.com/macros/s/AKfycbwZwGc_QAzqbh7mT9n1MLzqTjMvXX8Lae9Dk5EeKfS-Yva73YZ_g8-3-6IB6MC4_VJGdQ/exec",
+  WEB_APP_URL: "https://script.google.com/macros/s/AKfycbwCVLa6GF1AvlhN79wiO6FsUpmbYLxWPH4_Ltf1aHJ4wO6QB-tHMZMYWGkTqUhhklFtSw/exec",
   ALL_CLS: [
     "ป.1","ป.2","ป.3","ป.4","ป.5","ป.6",
     "ม.1 เทอม 1","ม.1 เทอม 2",
@@ -108,6 +108,8 @@ function api(action, data = {}) {
     'saveRTW',
     'saveGuidance',
     'saveScout',
+      'saveClub',        
+
     'saveTeacherAssignments',
     'saveSchoolProfile',
     'setupGradeYear'
