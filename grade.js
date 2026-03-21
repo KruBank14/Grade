@@ -40,7 +40,19 @@ const ScoreLogic = {
 // =====================================================
 function normalizeUnits(t) {
   if (!Array.isArray(App.units[t])) App.units[t] = [];
-  App.units[t] = App.units[t].map((u, idx) => (u && Array.isArray(u.items) ? u : { name: u?.name || `หน่วยที่ ${idx + 1}`, max: Number(u?.max) || 10, items:[{ name: u?.name || 'งาน 1', max: Number(u?.max) || 10 }] }));
+  App.units[t] = App.units[t].map((u, idx) => {
+    const items = Array.isArray(u?.items) ? u.items.map((item, ii) => ({
+      name: item?.name || `งาน ${ii + 1}`,
+      max: Number(item?.max) || 0
+    })) : [{ name: "งาน 1", max: Number(u?.max) || 10 }];
+
+    return {
+      name: u?.name || `หน่วยที่ ${idx + 1}`,
+      max: Number(u?.max) || 0,
+      items,
+      indicators: Array.isArray(u?.indicators) ? [...new Set(u.indicators.map(String))] : []
+    };
+  });
 }
 
 function updateAutoScoreDisplay() {
@@ -65,6 +77,51 @@ function switchTerm(t, btn) {
   if (btn?.closest('.ttabs')) btn.closest('.ttabs').querySelectorAll('.ttab').forEach(b => b.classList.remove('on'));
   if (btn) btn.classList.add('on');
   $('subPanel_1').style.display = t === 1 ? '' : 'none'; $('subPanel_2').style.display = t === 2 ? '' : 'none';
+}
+
+function normalizeIndicatorBuckets(indicators) {
+  if (indicators && typeof indicators === 'object' && !Array.isArray(indicators)) {
+    const formative = Array.isArray(indicators.formative) ? indicators.formative : [];
+    const summative = Array.isArray(indicators.summative) ? indicators.summative : [];
+    return {
+      formative: formative.map(v => String(v || '').trim()).filter(Boolean),
+      summative: summative.map(v => String(v || '').trim()).filter(Boolean)
+    };
+  }
+
+  const legacy = String(indicators || '')
+    .split(/\r?\n/)
+    .map(v => v.trim())
+    .filter(Boolean);
+
+  return { formative: legacy, summative: [] };
+}
+
+function getIndicatorCatalog() {
+  const formative = String($('ci_indicators_formative')?.value || '').split(/\r?\n/).map(v => v.trim()).filter(Boolean);
+  const summative = String($('ci_indicators_summative')?.value || '').split(/\r?\n/).map(v => v.trim()).filter(Boolean);
+  return [
+    ...formative.map((text, idx) => ({ key: `F${idx + 1}`, text, type: 'formative', label: `ระหว่างทาง ${idx + 1}` })),
+    ...summative.map((text, idx) => ({ key: `S${idx + 1}`, text, type: 'summative', label: `ปลายทาง ${idx + 1}` }))
+  ];
+}
+
+function getIndicatorMap() {
+  return Object.fromEntries(getIndicatorCatalog().map(item => [item.key, item]));
+}
+
+function getUnitIndicatorBadges(unit) {
+  const imap = getIndicatorMap();
+  return (unit?.indicators || []).map(key => imap[key]).filter(Boolean);
+}
+
+function toggleUnitIndicator(t, ui, key, checked) {
+  const unit = App.units?.[t]?.[ui];
+  if (!unit) return;
+  const current = new Set(Array.isArray(unit.indicators) ? unit.indicators : []);
+  if (checked) current.add(key); else current.delete(key);
+  unit.indicators = [...current];
+  renderSubList(t);
 }
 
 function setActiveUnitTab(t, idx) {
@@ -137,14 +194,39 @@ function renderUnitEditor(t) {
 
   const ui = App.activeUnitTab[t];
   const unit = units[ui];
+  const catalog = getIndicatorCatalog();
+  const grouped = {
+    formative: catalog.filter(item => item.type === 'formative'),
+    summative: catalog.filter(item => item.type === 'summative')
+  };
+  const selectedBadges = getUnitIndicatorBadges(unit);
+
+  const renderIndicatorGroup = (title, type, items) => `
+    <div class="indicator-group">
+      <div class="indicator-group-title">${title} <small>${items.length} ข้อ</small></div>
+      ${items.length ? `
+        <div class="indicator-list">
+          ${items.map(item => `
+            <label class="indicator-item">
+              <input type="checkbox" ${Array.isArray(unit.indicators) && unit.indicators.includes(item.key) ? 'checked' : ''}
+                onchange="toggleUnitIndicator(${t}, ${ui}, '${item.key}', this.checked)">
+              <span class="indicator-item-text"><strong>${item.label}</strong> ${item.text}</span>
+            </label>
+          `).join('')}
+        </div>
+      ` : `<div class="indicator-empty">ยังไม่ได้กำหนดตัวชี้วัด${type === 'formative' ? 'ระหว่างทาง' : 'ปลายทาง'}ในหน้ารายวิชา</div>`}
+    </div>
+  `;
 
   wrap.innerHTML = `
     <div class="unit-editor-card">
       <div class="unit-editor-head">
         <span class="sub-n">${ui + 1}.</span>
         <input class="sub-name" type="text" value="${unit.name || ''}" placeholder="ชื่อหน่วย" onchange="App.units[${t}][${ui}].name=this.value;renderSubList(${t});">
+
         <span class="sub-max-lbl">คะแนนเต็ม</span>
         <input class="sub-max" type="number" min="1" value="${Number(unit.max) || 0}" onchange="App.units[${t}][${ui}].max=Number(this.value)||0;updateAutoScoreDisplay();renderSubList(${t});">
+
         <button class="btn-rm" onclick="rmSub(${t}, ${ui})">✕</button>
       </div>
 
@@ -160,6 +242,21 @@ function renderUnitEditor(t) {
       </div>
 
       <button type="button" class="btn-add-sub mt-2" onclick="addSubItem(${t}, ${ui})">＋ เพิ่มงาน</button>
+
+      <div class="unit-meta-grid">
+        <div class="unit-meta-card">
+          <div class="unit-meta-title">ตัวชี้วัดที่ใช้ในหน่วยนี้</div>
+          <div class="indicator-grid">
+            ${renderIndicatorGroup('ตัวชี้วัดระหว่างทาง', 'formative', grouped.formative)}
+            ${renderIndicatorGroup('ตัวชี้วัดปลายทาง', 'summative', grouped.summative)}
+          </div>
+          ${selectedBadges.length ? `
+            <div class="indicator-badge-list">
+              ${selectedBadges.map(item => `<span class="indicator-badge ${item.type}">${item.label}</span>`).join('')}
+            </div>
+          ` : `<div class="unit-meta-note">ยังไม่ได้เลือกตัวชี้วัดให้หน่วยนี้</div>`}
+        </div>
+      </div>
 
       <div class="raw-preview mt-2">คะแนนดิบรวมของงาน: <strong>${ScoreLogic.getUnitRawMax(t, ui)}</strong> | คะแนนที่เก็บเข้าหน่วย: <strong class="res">${Number(unit.max) || 0}</strong></div>
     </div>
@@ -471,21 +568,47 @@ function applySubConfig() {
 // =====================================================
 function getCourseInfoForm() {
   return {
-    learningArea: $('ci_learning_area').value || '', name: $('ci_name').value || '', code: $('ci_code').value || '',
-    type: $('ci_type').value || 'รายวิชาพื้นฐาน', credit: $('ci_credit').value || '', teacherName: $('ci_teacher_name').value || '',
-    groupHeadName: $('ci_group_head_name').value || '', description: $('ci_description').value || '', indicators: $('ci_indicators').value || '',
-    schedule: { mon: +$('sch_mon').value || 0, tue: +$('sch_tue').value || 0, wed: +$('sch_wed').value || 0, thu: +$('sch_thu').value || 0, fri: +$('sch_fri').value || 0, manualAdjust: +$('ci_manual_adjust').value || 0, totalHours: +$('ci_total_hours').textContent || 0 }
+    learningArea: $('ci_learning_area').value || '',
+    name: $('ci_name').value || '',
+    code: $('ci_code').value || '',
+    type: $('ci_type').value || 'รายวิชาพื้นฐาน',
+    credit: $('ci_credit').value || '',
+    teacherName: $('ci_teacher_name').value || '',
+    groupHeadName: $('ci_group_head_name').value || '',
+    description: $('ci_description').value || '',
+    indicators: {
+      formative: String($('ci_indicators_formative').value || '').split(/\r?\n/).map(v => v.trim()).filter(Boolean),
+      summative: String($('ci_indicators_summative').value || '').split(/\r?\n/).map(v => v.trim()).filter(Boolean)
+    },
+    schedule: {
+      mon: +$('sch_mon').value || 0,
+      tue: +$('sch_tue').value || 0,
+      wed: +$('sch_wed').value || 0,
+      thu: +$('sch_thu').value || 0,
+      fri: +$('sch_fri').value || 0,
+      manualAdjust: +$('ci_manual_adjust').value || 0,
+      totalHours: +$('ci_total_hours').textContent || 0
+    }
   };
 }
 
 function setCourseInfoForm(c = {}, subj = '') {
-  $('ci_learning_area').value = c.learningArea || ''; $('ci_name').value = c.name || subj || ''; $('ci_code').value = c.code || '';
-  $('ci_type').value = c.type || 'รายวิชาพื้นฐาน'; $('ci_credit').value = c.credit || ''; $('ci_teacher_name').value = c.teacherName || '';
-  $('ci_group_head_name').value = c.groupHeadName || ''; $('ci_description').value = c.description || ''; $('ci_indicators').value = c.indicators || '';
-  ['mon','tue','wed','thu','fri'].forEach(d => $(`sch_${d}`).value = c.schedule?.[d] || 0);
-  $('ci_manual_adjust').value = c.schedule?.manualAdjust || 0; $('ci_total_hours').textContent = c.schedule?.totalHours || 0;
-}
+  const indicatorBuckets = normalizeIndicatorBuckets(c.indicators);
 
+  $('ci_learning_area').value = c.learningArea || '';
+  $('ci_name').value = c.name || subj || '';
+  $('ci_code').value = c.code || '';
+  $('ci_type').value = c.type || 'รายวิชาพื้นฐาน';
+  $('ci_credit').value = c.credit || '';
+  $('ci_teacher_name').value = c.teacherName || '';
+  $('ci_group_head_name').value = c.groupHeadName || '';
+  $('ci_description').value = c.description || '';
+  $('ci_indicators_formative').value = indicatorBuckets.formative.join('\n');
+  $('ci_indicators_summative').value = indicatorBuckets.summative.join('\n');
+  ['mon','tue','wed','thu','fri'].forEach(d => $(`sch_${d}`).value = c.schedule?.[d] || 0);
+  $('ci_manual_adjust').value = c.schedule?.manualAdjust || 0;
+  $('ci_total_hours').textContent = c.schedule?.totalHours || 0;
+}
 function getSchoolProfileForm() {
   return { school_name: $('sp_school_name').value || '', director_name: $('sp_director_name').value || '', director_position: $('sp_director_position').value || 'ผู้อำนวยการโรงเรียน', academic_head_name: $('sp_academic_head_name').value || '', academic_head_position: $('sp_academic_head_position').value || 'หัวหน้าวิชาการ' };
 }
