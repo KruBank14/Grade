@@ -18,10 +18,6 @@ const Club = {
 
 function renderClubPanel() {
   const wrap = $('clubContainer'); if (!wrap) return;
-  if (!App.students || !App.students.length) {
-    wrap.innerHTML = `<div class="text-center text-muted py-3" style="font-size:13px;">กรุณาโหลดรายชื่อผู้เรียนก่อน</div>`;
-    return;
-  }
   _renderClubMain();
 }
 
@@ -35,45 +31,61 @@ function switchClubTab(term, btn) {
   _renderClubMain();
 }
 
+// ── โหลดรายชื่อทุกชั้น ──
+// ใช้ getClubsByClassroom (มีอยู่แล้วใน GAS) ยิงพร้อมกันทุกชั้น
+// ได้ทั้งรายชื่อ + ข้อมูลว่าใครอยู่ชุมนุมอะไรแล้ว
 async function loadAllClubStudents() {
   const year = $('gYear').value;
-  const cls  = $('gClass').value;
-
   if (!year) { Utils.toast('กรุณาเลือกปีการศึกษาก่อน', 'error'); return; }
 
-  // ใช้ App.students ที่โหลดมาแล้วจาก getGrades — ไม่ต้องยิง API ใหม่
-  if (!App.students || !App.students.length) {
-    Utils.toast('กรุณาโหลดตารางคะแนนก่อน เพื่อดึงรายชื่อนักเรียน', 'error');
-    return;
-  }
+  const t       = Club.term;
+  const classes = CONFIG.ALL_CLS.filter(c => !c.includes('เทอม')); // ป.1–ป.6, ม.1–ม.3
 
-  const t = Club.term;
-  Utils.showLoading('โหลดรายชื่อ...');
+  Utils.showLoading('โหลดรายชื่อทุกชั้น...');
   try {
-    // ดึง clubMap ของชั้นปัจจุบันจาก GAS เพื่อรู้ว่าใครอยู่ชุมนุมอื่นแล้ว
-    let clubMap = {};
-    try {
-      const res = await api('getClubsByClassroom', { year, classroom: cls, term: t });
-      (res.students || []).forEach(s => {
-        if (s.clubName) clubMap[s.studentId] = s.clubName;
-      });
-    } catch(e) { /* ยังไม่มีชีทชุมนุม — ไม่ error */ }
+    // ยิง getClubsByClassroom ทุกชั้นพร้อมกัน
+    const results = await Promise.all(
+      classes.map(cls =>
+        api('getClubsByClassroom', { year, classroom: cls, term: t })
+          .then(res => ({ cls, students: res.students || [], error: null }))
+          .catch(e  => ({ cls, students: [],               error: e.message || 'โหลดไม่สำเร็จ' }))
+      )
+    );
 
-    // จัดรายชื่อนักเรียนชั้นปัจจุบันเข้า allClassStudents
     Club.allClassStudents = {};
-    Club.loadErrors = {};
+    Club.loadErrors       = {};
 
-    // ใส่นักเรียนชั้นที่โหลดอยู่ (App.students) พร้อมข้อมูล inOtherClub
-    Club.allClassStudents[cls] = App.students.map(s => ({
-      studentId:   s.studentId,
-      name:        s.name,
-      inOtherClub: !!(clubMap[s.studentId] && !Club.members.some(m => m.studentId === s.studentId)),
-      clubName:    clubMap[s.studentId] || ''
-    }));
+    results.forEach(({ cls, students, error }) => {
+      if (error) {
+        Club.loadErrors[cls] = error;
+        Club.allClassStudents[cls] = [];
+      } else {
+        // แปลง students → format เดียวกับที่ _renderClubStudentPicker ใช้
+        Club.allClassStudents[cls] = students.map(s => ({
+          studentId:   s.studentId,
+          name:        s.name,
+          inOtherClub: !!s.clubName,   // มีชุมนุมแล้ว = อยู่ชุมนุมอื่น
+          clubName:    s.clubName || ''
+        }));
+      }
+    });
 
-    Club.activeClassTab = cls;
+    const successCount = results.filter(r => !r.error && r.students.length > 0).length;
+    const failCount    = results.filter(r => !!r.error).length;
+
+    // เลือก tab ชั้นแรกที่มีข้อมูล
+    const firstCls = classes.find(c => (Club.allClassStudents[c] || []).length > 0) || classes[0];
+    Club.activeClassTab = firstCls;
     Club.loaded = true;
-    Utils.toast(`✅ โหลดรายชื่อสำเร็จ ${Club.allClassStudents[cls].length} คน`);
+
+    if (failCount > 0 && successCount === 0) {
+      Utils.toast('โหลดรายชื่อไม่สำเร็จทุกชั้น ตรวจสอบปีการศึกษา', 'error');
+    } else if (failCount > 0) {
+      Utils.toast(`⚠️ โหลดสำเร็จ ${successCount} ชั้น, ไม่สำเร็จ ${failCount} ชั้น`);
+    } else {
+      Utils.toast(`✅ โหลดรายชื่อสำเร็จทั้ง ${successCount} ชั้น`);
+    }
+
     _renderClubMain();
   } catch(e) { Utils.toast(e.message, 'error'); }
   Utils.hideLoading();
@@ -131,7 +143,9 @@ function _renderClubMain() {
         </button>
       </div>
       <div id="clubStudentPicker">
-        ${!Club.loaded ? `<div style="font-size:13px;color:#9ca3af;padding:6px 0;">กดโหลดรายชื่อเพื่อเลือกนักเรียน</div>` : ''}
+        ${!Club.loaded
+          ? `<div style="font-size:13px;color:#9ca3af;padding:6px 0;">กดโหลดรายชื่อเพื่อเลือกนักเรียน</div>`
+          : ''}
       </div>
 
       <hr style="border-color:#fde68a;margin:12px 0;">
@@ -144,13 +158,16 @@ function _renderClubMain() {
           : Object.entries(byClass).map(([cls, ms]) =>
               `<div style="margin-bottom:6px;">
                 <span style="font-size:11px;font-weight:700;color:#92400e;margin-right:6px;">${cls}</span>
-                ${ms.map(m => `<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;
-                  border-radius:20px;background:#fef3c7;border:1px solid #fde68a;font-size:12px;color:#92400e;margin:2px;">
-                  ${m.name}
-                  <button onclick="toggleClubMember('${m.studentId}','${m.name.replace(/'/g,"\\'")}','${m.classroom}')"
-                    style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:13px;padding:0;line-height:1;">×</button>
-                </span>`).join('')}
-              </div>`).join('')
+                ${ms.map(m =>
+                  `<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;
+                    border-radius:20px;background:#fef3c7;border:1px solid #fde68a;font-size:12px;color:#92400e;margin:2px;">
+                    ${m.name}
+                    <button onclick="toggleClubMember('${m.studentId}','${m.name.replace(/'/g,"\\'")}','${m.classroom}')"
+                      style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:13px;padding:0;line-height:1;">×</button>
+                  </span>`
+                ).join('')}
+              </div>`
+            ).join('')
         }
       </div>
     </div>
@@ -179,16 +196,40 @@ function _renderClubMain() {
   if (Club.loaded) _renderClubStudentPicker();
 }
 
+// ── แสดง tab ทุกชั้น + ชิปนักเรียนของชั้นที่เลือก ──
 function _renderClubStudentPicker() {
   const wrap = $('clubStudentPicker'); if (!wrap) return;
-  const activeCls = Club.activeClassTab;
-  const students  = Club.allClassStudents[activeCls] || [];
-  const errorMsg  = Club.loadErrors ? Club.loadErrors[activeCls] : null;
+  const classes   = CONFIG.ALL_CLS.filter(c => !c.includes('เทอม'));
+  const activeCls = Club.activeClassTab || classes[0];
+
+  // ── tabs ──
+  const tabsHtml = classes.map(cls => {
+    const selected = Club.members.filter(m => m.classroom === cls).length;
+    const hasError = !!Club.loadErrors[cls];
+    const on       = cls === activeCls;
+    const border   = on ? '#d97706' : hasError ? '#fca5a5' : '#e5e7eb';
+    const bg       = on ? '#fef3c7' : hasError ? '#fff1f2' : '#fff';
+    const color    = on ? '#92400e' : hasError ? '#b91c1c' : '#6b7280';
+    return `<button type="button"
+      onclick="switchClubClassTab('${cls}')"
+      title="${hasError ? Club.loadErrors[cls] : ''}"
+      style="padding:4px 12px;border-radius:20px;white-space:nowrap;cursor:pointer;font-size:12px;
+             border:1px solid ${border};background:${bg};color:${color};">
+      ${cls}${hasError ? ' ⚠️' : ''}${selected > 0
+        ? ` <span style="background:#d97706;color:#fff;border-radius:10px;padding:0 5px;font-size:11px;">${selected}</span>`
+        : ''}
+    </button>`;
+  }).join('');
+
+  // ── ชิปนักเรียนของ tab ที่เลือก ──
+  const students = Club.allClassStudents[activeCls] || [];
+  const errorMsg = Club.loadErrors[activeCls];
 
   let chipsHtml;
   if (errorMsg) {
-    chipsHtml = `<div style="font-size:12px;color:#b91c1c;padding:8px;background:#fff1f2;border-radius:6px;border:1px solid #fecaca;">
-      ⚠️ โหลดรายชื่อไม่สำเร็จ<br>
+    chipsHtml = `<div style="font-size:12px;color:#b91c1c;padding:8px;background:#fff1f2;
+      border-radius:6px;border:1px solid #fecaca;">
+      ⚠️ โหลดรายชื่อชั้น ${activeCls} ไม่สำเร็จ<br>
       <span style="color:#6b7280;font-size:11px;">${errorMsg}</span>
     </div>`;
   } else if (students.length === 0) {
@@ -197,28 +238,45 @@ function _renderClubStudentPicker() {
     chipsHtml = `<div style="display:flex;flex-wrap:wrap;gap:6px;padding:6px 0;">` +
       students.map(s => {
         const inMyClub = Club.members.some(m => m.studentId === s.studentId);
+        // inOtherClub = ถูก mark ว่าอยู่ชุมนุมแล้ว แต่ไม่ใช่ชุมนุมนี้
         const inOther  = s.inOtherClub && !inMyClub;
         const bg     = inMyClub ? '#d1fae5' : inOther ? '#f3f4f6' : '#fff';
         const border = inMyClub ? '#6ee7b7' : inOther ? '#e5e7eb' : '#d1d5db';
         const color  = inMyClub ? '#065f46' : inOther ? '#9ca3af' : '#374151';
         const check  = inMyClub ? '✓ ' : '';
         const tag    = inOther ? ` <span style="font-size:10px;color:#9ca3af;">(${s.clubName})</span>` : '';
-        return `<div style="display:inline-flex;align-items:center;gap:3px;padding:4px 10px;
-          border-radius:20px;border:1px solid ${border};background:${bg};font-size:12px;color:${color};
-          cursor:${inOther?'not-allowed':'pointer'};user-select:none;${inOther?'opacity:.5;':''}"
-          onclick="${inOther?'':` toggleClubMember('${s.studentId}','${s.name.replace(/'/g,"\'")}','${activeCls}')`}">
+        const click  = inOther ? '' : `toggleClubMember('${s.studentId}','${s.name.replace(/'/g,"\\'")}','${activeCls}')`;
+        return `<div
+          onclick="${click}"
+          style="display:inline-flex;align-items:center;gap:3px;padding:4px 10px;
+            border-radius:20px;border:1px solid ${border};background:${bg};
+            font-size:12px;color:${color};
+            cursor:${inOther?'not-allowed':'pointer'};user-select:none;
+            ${inOther?'opacity:.6;':''}">
           ${check}${s.name}${tag}
         </div>`;
       }).join('') + `</div>`;
   }
 
-  wrap.innerHTML = `<div style="max-height:200px;overflow-y:auto;">${chipsHtml}</div>`;
+  wrap.innerHTML = `
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">${tabsHtml}</div>
+    <div style="max-height:220px;overflow-y:auto;">${chipsHtml}</div>
+  `;
 }
 
 function toggleClubMember(sid, name, classroom) {
   const idx = Club.members.findIndex(m => m.studentId === sid);
-  if (idx >= 0) Club.members.splice(idx, 1);
-  else Club.members.push({ studentId: sid, name, classroom });
+  if (idx >= 0) {
+    Club.members.splice(idx, 1);
+    // คืนสถานะ inOtherClub ให้ถูกต้อง (ดูจากข้อมูลที่โหลดมา)
+    const orig = (Club.allClassStudents[classroom] || []).find(s => s.studentId === sid);
+    if (orig) orig.inOtherClub = false;
+  } else {
+    Club.members.push({ studentId: sid, name, classroom });
+    // ถ้าเพิ่งเลือก ให้ mark inOtherClub = false เพื่อให้แสดงติ๊กถูก
+    const orig = (Club.allClassStudents[classroom] || []).find(s => s.studentId === sid);
+    if (orig) orig.inOtherClub = false;
+  }
   _renderClubMain();
   if (Club.loaded) _renderClubStudentPicker();
 }
@@ -235,9 +293,9 @@ async function loadClubAttendance() {
     });
     Club.attendanceMap = res.attendanceMap || {};
     if (res.topics && res.topics.length) Club.topics = res.topics;
-    if (res.teacher) Club.teacher = res.teacher;
+    if (res.teacher)   Club.teacher   = res.teacher;
     if (res.dayOfWeek) Club.dayOfWeek = res.dayOfWeek;
-    if (res.clubName) Club.clubName = res.clubName;
+    if (res.clubName)  Club.clubName  = res.clubName;
     _renderClubAttTable();
     _renderClubMain();
   } catch(e) { Utils.toast(e.message, 'error'); }
@@ -246,18 +304,20 @@ async function loadClubAttendance() {
 
 function _renderClubAttTable() {
   const wrap = $('clubAttContainer'); if (!wrap) return;
-  const topics = Club.topics;
+  const topics     = Club.topics;
   const topicCount = topics.length;
   const topicHeaders = topics.map((tp, i) =>
-    `<th style="font-size:.72rem;writing-mode:vertical-rl;transform:rotate(180deg);max-height:120px;white-space:nowrap;padding:6px 3px;background:#fef3c7;color:#92400e;">${i+1}. ${tp}</th>`
+    `<th style="font-size:.72rem;writing-mode:vertical-rl;transform:rotate(180deg);
+      max-height:120px;white-space:nowrap;padding:6px 3px;background:#fef3c7;color:#92400e;">
+      ${i+1}. ${tp}</th>`
   ).join('');
 
   const rows = Club.members.map((m, idx) => {
-    const d = Club.attendanceMap[m.studentId] || {};
+    const d        = Club.attendanceMap[m.studentId] || {};
     const attArray = Array.isArray(d.attArray) ? d.attArray : Array(topicCount).fill('');
     const attended = Number(d.attended) || attArray.filter(v => v === 'เข้า').length;
-    const result = d.result || (topicCount > 0 && attended/topicCount >= 0.8 ? 'ผ่าน' : 'ไม่ผ่าน');
-    const cells = Array(topicCount).fill(0).map((_, i) => {
+    const result   = d.result || (topicCount > 0 && attended/topicCount >= 0.8 ? 'ผ่าน' : 'ไม่ผ่าน');
+    const cells    = Array(topicCount).fill(0).map((_, i) => {
       const checked = attArray[i] === 'เข้า';
       return `<td style="text-align:center;"><input type="checkbox" ${checked?'checked':''}
         style="width:16px;height:16px;cursor:pointer;accent-color:#d97706;"
@@ -266,14 +326,16 @@ function _renderClubAttTable() {
     const badge = result === 'ผ่าน'
       ? `<span style="background:#dcfce7;color:#166534;padding:2px 8px;border-radius:20px;font-size:.76rem;font-weight:700;">ผ่าน</span>`
       : `<span style="background:#fee2e2;color:#991b1b;padding:2px 8px;border-radius:20px;font-size:.76rem;font-weight:700;">ไม่ผ่าน</span>`;
-    return `<tr><td style="text-align:center;color:#6b7280;font-size:.76rem;">${idx+1}</td>
+    return `<tr>
+      <td style="text-align:center;color:#6b7280;font-size:.76rem;">${idx+1}</td>
       <td style="font-weight:600;font-size:.82rem;min-width:120px;">${m.name}</td>
       <td style="font-size:.74rem;color:#6b7280;">${m.classroom}</td>
       ${cells}
       <td style="text-align:center;"><input type="number" min="0" max="${topicCount}" value="${attended}"
         style="width:44px;text-align:center;border:1px solid #fde68a;border-radius:6px;padding:3px;font-size:.8rem;"
         onchange="updateClubAttCount('${m.studentId}',this.value)"></td>
-      <td style="text-align:center;">${badge}</td></tr>`;
+      <td style="text-align:center;">${badge}</td>
+    </tr>`;
   }).join('');
 
   wrap.innerHTML = `
@@ -293,7 +355,7 @@ function _renderClubAttTable() {
     <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap;">
       <input type="text" id="clubTopicInp" class="cfg-n" style="flex:1;text-align:left;min-width:140px;" placeholder="เพิ่มหัวข้อ/ครั้งที่...">
       <button class="btn-sm" onclick="addClubTopic()" style="white-space:nowrap;">+ เพิ่มหัวข้อ</button>
-      ${topicCount>0?`<button class="btn-sm" style="color:#ef4444;border-color:#fecaca;" onclick="removeLastClubTopic()">ลบล่าสุด</button>`:''}
+      ${topicCount > 0 ? `<button class="btn-sm" style="color:#ef4444;border-color:#fecaca;" onclick="removeLastClubTopic()">ลบล่าสุด</button>` : ''}
     </div>`;
 }
 
@@ -331,7 +393,7 @@ function removeLastClubTopic() {
 
 async function saveClubData() {
   if (!Club.clubName.trim()) return Utils.toast('กรอกชื่อชุมนุมก่อน', 'error');
-  if (!Club.members.length) return Utils.toast('ยังไม่มีสมาชิก', 'error');
+  if (!Club.members.length)  return Utils.toast('ยังไม่มีสมาชิก', 'error');
   const year = $('gYear').value;
   const records = Club.members.map(m => {
     const d = Club.attendanceMap[m.studentId] || {};
@@ -352,15 +414,27 @@ async function loadHomeroomClubView() {
   if (!cls) { wrap.innerHTML = `<div style="color:#9ca3af;font-size:13px;">กรุณาเลือกชั้นเรียนก่อน</div>`; return; }
   Utils.showLoading('โหลดข้อมูลชุมนุม...');
   try {
-    const res = await api('getClubsByClassroom', { year, classroom: cls, term });
+    const res      = await api('getClubsByClassroom', { year, classroom: cls, term });
     const students = res.students || [];
-    const noClub = students.filter(s => !s.clubName).length;
-    const rows = students.map((s,i) => {
-      const badge = s.clubName ? `<span style="background:#fef3c7;color:#92400e;border:1px solid #fde68a;padding:2px 10px;border-radius:20px;font-size:.78rem;font-weight:700;">${s.clubName}</span>` : `<span style="color:#9ca3af;font-size:.78rem;">-</span>`;
-      const result = s.result==='ผ่าน' ? `<span style="background:#dcfce7;color:#166534;padding:2px 8px;border-radius:20px;font-size:.76rem;font-weight:700;">ผ่าน</span>` : s.result==='ไม่ผ่าน' ? `<span style="background:#fee2e2;color:#991b1b;padding:2px 8px;border-radius:20px;font-size:.76rem;font-weight:700;">ไม่ผ่าน</span>` : `<span style="color:#9ca3af;font-size:.76rem;">-</span>`;
-      return `<tr><td style="text-align:center;color:#6b7280;font-size:.76rem;">${i+1}</td><td style="font-weight:600;font-size:.82rem;">${s.name}</td><td style="text-align:center;">${badge}</td><td style="text-align:center;">${result}</td></tr>`;
+    const noClub   = students.filter(s => !s.clubName).length;
+    const rows     = students.map((s,i) => {
+      const badge  = s.clubName
+        ? `<span style="background:#fef3c7;color:#92400e;border:1px solid #fde68a;padding:2px 10px;border-radius:20px;font-size:.78rem;font-weight:700;">${s.clubName}</span>`
+        : `<span style="color:#9ca3af;font-size:.78rem;">-</span>`;
+      const result = s.result === 'ผ่าน'
+        ? `<span style="background:#dcfce7;color:#166534;padding:2px 8px;border-radius:20px;font-size:.76rem;font-weight:700;">ผ่าน</span>`
+        : s.result === 'ไม่ผ่าน'
+          ? `<span style="background:#fee2e2;color:#991b1b;padding:2px 8px;border-radius:20px;font-size:.76rem;font-weight:700;">ไม่ผ่าน</span>`
+          : `<span style="color:#9ca3af;font-size:.76rem;">-</span>`;
+      return `<tr>
+        <td style="text-align:center;color:#6b7280;font-size:.76rem;">${i+1}</td>
+        <td style="font-weight:600;font-size:.82rem;">${s.name}</td>
+        <td style="text-align:center;">${badge}</td>
+        <td style="text-align:center;">${result}</td>
+      </tr>`;
     }).join('');
-    wrap.innerHTML = `${noClub>0?`<div style="font-size:12px;color:#d97706;margin-bottom:8px;">⚠️ มี ${noClub} คนยังไม่มีชุมนุม</div>`:''}
+    wrap.innerHTML = `
+      ${noClub > 0 ? `<div style="font-size:12px;color:#d97706;margin-bottom:8px;">⚠️ มี ${noClub} คนยังไม่มีชุมนุม</div>` : ''}
       <div style="overflow-x:auto;border:1px solid #fde68a;border-radius:8px;">
         <table style="width:100%;border-collapse:collapse;font-size:.84rem;">
           <thead><tr style="background:#fef3c7;">
@@ -372,7 +446,10 @@ async function loadHomeroomClubView() {
           <tbody>${rows}</tbody>
         </table>
       </div>`;
-  } catch(e) { Utils.toast(e.message,'error'); wrap.innerHTML=`<div style="color:#ef4444;font-size:13px;">${e.message}</div>`; }
+  } catch(e) {
+    Utils.toast(e.message, 'error');
+    wrap.innerHTML = `<div style="color:#ef4444;font-size:13px;">${e.message}</div>`;
+  }
   Utils.hideLoading();
 }
 
@@ -381,13 +458,24 @@ async function printClubReport(term) {
   if (!cls) return Utils.toast('กรุณาเลือกชั้นก่อน', 'error');
   Utils.showLoading('สร้างรายงาน...');
   try {
-    const res = await api('getClubsByClassroom', { year, classroom: cls, term });
+    const res     = await api('getClubsByClassroom', { year, classroom: cls, term });
     const profile = App.schoolProfile || {};
-    const rows = (res.students||[]).map((s,i) => `<tr><td style="text-align:center;">${i+1}</td><td>${s.name}</td><td style="text-align:center;">${s.clubName||'-'}</td><td style="text-align:center;">${s.result||'-'}</td></tr>`).join('');
-    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>body{font-family:Sarabun,sans-serif;padding:20px;}h3,h4{text-align:center;margin:4px 0;}table{width:100%;border-collapse:collapse;margin-top:12px;}th,td{border:1px solid #ccc;padding:6px 10px;font-size:14px;}th{background:#fef3c7;}@media print{button{display:none;}}</style></head><body>
-      <h3>${profile.school_name||''}</h3><h4>สรุปชุมนุม ชั้น ${cls} ปีการศึกษา ${year} ภาคเรียนที่ ${term}</h4>
-      <table><thead><tr><th>ที่</th><th>ชื่อ-นามสกุล</th><th>ชุมนุม</th><th>ผล</th></tr></thead><tbody>${rows}</tbody></table>
-      <button onclick="window.print()" style="margin-top:16px;padding:8px 20px;cursor:pointer;">🖨️ พิมพ์</button></body></html>`;
+    const rows    = (res.students||[]).map((s,i) =>
+      `<tr><td style="text-align:center;">${i+1}</td><td>${s.name}</td>
+       <td style="text-align:center;">${s.clubName||'-'}</td>
+       <td style="text-align:center;">${s.result||'-'}</td></tr>`
+    ).join('');
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+      <style>body{font-family:Sarabun,sans-serif;padding:20px;}h3,h4{text-align:center;margin:4px 0;}
+      table{width:100%;border-collapse:collapse;margin-top:12px;}
+      th,td{border:1px solid #ccc;padding:6px 10px;font-size:14px;}th{background:#fef3c7;}
+      @media print{button{display:none;}}</style></head><body>
+      <h3>${profile.school_name||''}</h3>
+      <h4>สรุปชุมนุม ชั้น ${cls} ปีการศึกษา ${year} ภาคเรียนที่ ${term}</h4>
+      <table><thead><tr><th>ที่</th><th>ชื่อ-นามสกุล</th><th>ชุมนุม</th><th>ผล</th></tr></thead>
+      <tbody>${rows}</tbody></table>
+      <button onclick="window.print()" style="margin-top:16px;padding:8px 20px;cursor:pointer;">🖨️ พิมพ์</button>
+      </body></html>`;
     const w = window.open('','_blank'); w.document.write(html); w.document.close(); w.print();
   } catch(e) { Utils.toast(e.message,'error'); }
   Utils.hideLoading();
