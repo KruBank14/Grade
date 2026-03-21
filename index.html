@@ -1331,6 +1331,10 @@ body{
   <span class="tab-icon">⚜️</span>
   <span class="tab-label">ลูกเสือ</span>
 </button>
+          <button type="button" class="settings-tab" onclick="switchSettingsTab('homeroom', this)">
+            <span class="tab-icon">🏠</span>
+            <span class="tab-label">ครูประจำชั้น</span>
+          </button>
         </div>
       </div>
 
@@ -1492,23 +1496,7 @@ body{
             </label>
           </div>
 
-          <div class="grade-actions">
-            <button class="btn-pri" style="background:linear-gradient(135deg,#0f766e,#0d9488);" onclick="printPp5SubjectPDF()">
-              🖨️ ปพ.5
-            </button>
-            <button class="btn-pri" style="background:linear-gradient(135deg,#16a34a,#15803d);" onclick="exportSummaryCSV()">📥 Excel</button>
-            <button class="btn-pri" style="background:linear-gradient(135deg,#0284c7,#0369a1);" onclick="openSummaryModeModal()">📊 สรุปเกรด</button>
-            <!-- ปุ่ม ปพ.6 ประถม (รายปี) -->
-            <button id="btnPp6T1" class="btn-pri" style="background:linear-gradient(135deg,#7c3aed,#6d28d9);" onclick="printClassPDF('term1')">
-              🖨️ ปพ.6 ท.1
-            </button>
-            <button id="btnPp6Year" class="btn-pri" onclick="printClassPDF('year')">
-              🖨️ ปพ.6 ทั้งปี
-            </button>
-            <!-- ปุ่ม ปพ.6 มัธยม (รายเทอม) -->
-            <button id="btnPp6Sem" class="btn-pri" style="display:none;background:linear-gradient(135deg,#4f46e5,#3730a3);" onclick="printClassPDF('term1')">
-              🖨️ ปพ.6
-            </button>
+          <div>
           </div>
         </div>
       </div>
@@ -1701,14 +1689,9 @@ body{
             <div class="score-mini-list">
               <div class="score-mini-item"><span>เทอม 1 คะแนนเก็บ</span><span class="val" id="show_t1_keep">0</span></div>
               <div class="score-mini-item"><span>เทอม 1 คะแนนสอบ</span><span class="val" id="show_t1_exam">0</span></div>
-              <div class="score-mini-item"><span>เทอม 1 รวม</span><span class="val" id="show_t1_total">0</span></div>
-              <div id="t2AutoBlock">
-                <div class="score-mini-item"><span>เทอม 2 คะแนนเก็บ</span><span class="val" id="show_t2_keep">0</span></div>
-                <div class="score-mini-item"><span>เทอม 2 คะแนนสอบ</span><span class="val" id="show_t2_exam">0</span></div>
-                <div class="score-mini-item"><span>เทอม 2 รวม</span><span class="val" id="show_t2_total">0</span></div>
-              </div>
+              <div class="score-mini-item" id="t2AutoBlock"><span>เทอม 2 คะแนนเก็บ / สอบ</span><span class="val"><span id="show_t2_keep">0</span> / <span id="show_t2_exam">0</span></span></div>
             </div>
-            <div class="unit-side-note mt-2">เก็บ = รวมคะแนนทุกหน่วย<br>สอบ = กำหนดในแท็บ "สอบ" ของแต่ละเทอม</div>
+            <div class="unit-side-note mt-2">เก็บ = รวมคะแนนทุกหน่วย ส่วนสอบ = คะแนนที่เหลือจากคะแนนเต็มของภาคเรียน</div>
           </div>
 
           <div class="card" style="background:#f8fafc;">
@@ -1726,11 +1709,25 @@ body{
           </div>
 
           <div id="subPanel_1">
+            <div class="raw-preview mb-2">
+              <span>คะแนนรวมทุกหน่วย เทอม 1:</span>
+              <strong id="sum_t1_units">0</strong>
+              <span>/</span>
+              <span class="res">50</span>
+            </div>
             <div class="sub-list" id="subList_1"></div>
+            <button class="btn-add-sub" onclick="addSub(1)">＋ เพิ่มหน่วยการเรียนรู้ เทอม 1</button>
           </div>
 
           <div id="subPanel_2" style="display:none;">
+            <div class="raw-preview mb-2">
+              <span>คะแนนรวมทุกหน่วย เทอม 2:</span>
+              <strong id="sum_t2_units">0</strong>
+              <span>/</span>
+              <span class="res">50</span>
+            </div>
             <div class="sub-list" id="subList_2"></div>
+            <button class="btn-add-sub" onclick="addSub(2)">＋ เพิ่มหน่วยการเรียนรู้ เทอม 2</button>
           </div>
 
           <button class="btn-apply mt-4" onclick="applySubConfig()">🔄 อัปเดตตาราง</button>
@@ -1965,6 +1962,44 @@ body{
   </div>
 
 </div>
+</div>
+
+<!-- ===== TAB: ครูประจำชั้น ===== -->
+<div class="settings-panel" id="panel_homeroom">
+  <div class="card mb-3" style="background:#fff;border:1px solid #e0e7ff;">
+    <div style="font-weight:800;font-size:.95rem;color:#4338ca;margin-bottom:16px;">🏠 เอกสารและรายงานประจำชั้น</div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;">
+
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:16px;">
+        <div style="font-weight:700;font-size:.85rem;color:#166534;margin-bottom:6px;">📋 ปพ.5 รายวิชา</div>
+        <div style="font-size:.78rem;color:#6b7280;margin-bottom:12px;">แบบบันทึกผลการเรียนรายวิชา</div>
+        <button class="btn-pri w-100" style="background:linear-gradient(135deg,#0f766e,#0d9488);" onclick="printPp5SubjectPDF()">
+          🖨️ พิมพ์ ปพ.5
+        </button>
+      </div>
+
+      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:16px;">
+        <div style="font-weight:700;font-size:.85rem;color:#1d4ed8;margin-bottom:6px;">📊 สรุปเกรด / ปพ.6</div>
+        <div style="font-size:.78rem;color:#6b7280;margin-bottom:12px;">สรุปผลการเรียนรายภาคหรือรายปี</div>
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          <button id="btnPp6T1" class="btn-pri" style="background:linear-gradient(135deg,#7c3aed,#6d28d9);" onclick="printClassPDF('term1')">🖨️ ปพ.6 เทอม 1</button>
+          <button id="btnPp6Year" class="btn-pri" onclick="printClassPDF('year')">🖨️ ปพ.6 ทั้งปี</button>
+          <button id="btnPp6Sem" class="btn-pri" style="display:none;background:linear-gradient(135deg,#4f46e5,#3730a3);" onclick="printClassPDF('term1')">🖨️ ปพ.6</button>
+          <button class="btn-pri" style="background:linear-gradient(135deg,#0284c7,#0369a1);" onclick="openSummaryModeModal()">📊 สรุปเกรด (ดูออนไลน์)</button>
+        </div>
+      </div>
+
+      <div style="background:#fefce8;border:1px solid #fde68a;border-radius:12px;padding:16px;">
+        <div style="font-weight:700;font-size:.85rem;color:#92400e;margin-bottom:6px;">📥 Export ข้อมูล</div>
+        <div style="font-size:.78rem;color:#6b7280;margin-bottom:12px;">ส่งออกคะแนนทั้งหมดเป็น Excel</div>
+        <button class="btn-pri w-100" style="background:linear-gradient(135deg,#16a34a,#15803d);" onclick="exportSummaryCSV()">
+          📥 Export Excel
+        </button>
+      </div>
+
+    </div>
+  </div>
 </div>
   </div>
 </div>
