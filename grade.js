@@ -40,7 +40,23 @@ const ScoreLogic = {
 // =====================================================
 function normalizeUnits(t) {
   if (!Array.isArray(App.units[t])) App.units[t] = [];
-  App.units[t] = App.units[t].map((u, idx) => (u && Array.isArray(u.items) ? u : { name: u?.name || `หน่วยที่ ${idx + 1}`, max: Number(u?.max) || 10, items:[{ name: u?.name || 'งาน 1', max: Number(u?.max) || 10 }] }));
+  App.units[t] = App.units[t].map((u, idx) => {
+    const base = u && Array.isArray(u.items)
+      ? u
+      : { name: u?.name || `หน่วยที่ ${idx + 1}`, max: Number(u?.max) || 10, items: [{ name: u?.name || 'งาน 1', max: Number(u?.max) || 10 }] };
+    if (!Array.isArray(base.indicators)) base.indicators = [];
+    return base;
+  });
+}
+
+// normalize exam config per term (score + indicators)
+function normalizeExam(t) {
+  const ex = App.config?.exam?.[t] || {};
+  if (!App.exam) App.exam = {};
+  App.exam[t] = {
+    score: Number(ex.score) || ScoreLogic.getExamMax(t),
+    indicators: Array.isArray(ex.indicators) ? ex.indicators : []
+  };
 }
 
 function updateAutoScoreDisplay() {
@@ -108,36 +124,146 @@ function refreshCourseOverview() {
   put('ov_unit_count', String((App.units?.[1]?.length || 0) + (App.units?.[2]?.length || 0)));
 }
 
-function addSub(t) { App.units[t].push({ name: `หน่วยที่ ${App.units[t].length + 1}`, max: 10, items: [{ name: "งาน 1", max: 10 }] }); refreshCourseOverview(); renderSubList(t); }
-function rmSub(t, ui) { if (confirm(`ลบ "${App.units[t][ui].name}" ?`)) { App.units[t].splice(ui, 1); refreshCourseOverview(); renderSubList(t); } }
+// ── active unit tab per term (index หรือ 'exam') ──
+const _activeUnitTab = { 1: 0, 2: 0 };
+
+function addSub(t) {
+  App.units[t].push({ name: `หน่วยที่ ${App.units[t].length + 1}`, max: 10, items: [{ name: 'งาน 1', max: 10 }], indicators: [] });
+  _activeUnitTab[t] = App.units[t].length - 1;
+  refreshCourseOverview(); renderSubList(t);
+}
+function rmSub(t, ui) {
+  if (confirm(`ลบ "${App.units[t][ui].name}" ?`)) {
+    App.units[t].splice(ui, 1);
+    _activeUnitTab[t] = Math.min(_activeUnitTab[t], Math.max(0, App.units[t].length - 1));
+    refreshCourseOverview(); renderSubList(t);
+  }
+}
 function addSubItem(t, ui) { App.units[t][ui].items.push({ name: `งาน ${App.units[t][ui].items.length + 1}`, max: 10 }); refreshCourseOverview(); renderSubList(t); }
 function rmSubItem(t, ui, ii) { if (confirm('ลบงานนี้?')) { App.units[t][ui].items.splice(ii, 1); refreshCourseOverview(); renderSubList(t); } }
 
+function setUnitTab(t, key) { _activeUnitTab[t] = key; renderSubList(t); }
+
+function toggleUnitIndicator(t, ui, code, checked) {
+  if (!Array.isArray(App.units[t][ui].indicators)) App.units[t][ui].indicators = [];
+  if (checked) { if (!App.units[t][ui].indicators.includes(code)) App.units[t][ui].indicators.push(code); }
+  else App.units[t][ui].indicators = App.units[t][ui].indicators.filter(c => c !== code);
+}
+
+function toggleExamIndicator(t, code, checked) {
+  if (!App.exam) App.exam = {};
+  if (!App.exam[t]) App.exam[t] = { score: 0, indicators: [] };
+  if (!Array.isArray(App.exam[t].indicators)) App.exam[t].indicators = [];
+  if (checked) { if (!App.exam[t].indicators.includes(code)) App.exam[t].indicators.push(code); }
+  else App.exam[t].indicators = App.exam[t].indicators.filter(c => c !== code);
+}
+
+function _getAllIndicators() {
+  const ind = App.courseInfo?.indicators || {};
+  const all = [
+    ...(Array.isArray(ind.formative) ? ind.formative : String(ind.formative || '').split(/\r?\n/).filter(Boolean)),
+    ...(Array.isArray(ind.summative) ? ind.summative : String(ind.summative || '').split(/\r?\n/).filter(Boolean))
+  ];
+  return [...new Set(all)];
+}
+
 function renderSubList(t) {
   const wrap = $(`subList_${t}`); if (!wrap) return;
-  if (!App.units[t].length) { wrap.innerHTML = `<div class="text-muted text-center py-3 border rounded">ยังไม่มีหน่วยการเรียนรู้</div>`; updateAutoScoreDisplay(); refreshCourseOverview(); return; }
-  
-  wrap.innerHTML = App.units[t].map((unit, ui) => {
-    return `<div class="sub-row mb-2 p-3 border rounded bg-white" style="display:block;">
+  const units = App.units[t] || [];
+  const QUOTA = App.isSemMode ? 100 : 50;
+  const acc = ScoreLogic.getUnitsMax(t);
+  const examScore = App.exam?.[t]?.score ?? ScoreLogic.getExamMax(t);
+  const total = acc + examScore;
+  const allInd = _getAllIndicators();
+  const activeKey = _activeUnitTab[t];
+
+  // term summary bar
+  const qOk = total === QUOTA;
+  const barHtml = `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 12px;border-radius:8px;background:#f8f9fa;border:1px solid #dee2e6;margin-bottom:10px;font-size:13px;">
+    เก็บ <strong>${acc}</strong> + สอบ <strong>${examScore}</strong> =
+    <strong style="color:${qOk ? '#16a34a' : '#d97706'};">${total} / ${QUOTA}</strong>
+    <span style="color:#6b7280;font-size:12px;margin-left:4px;">เหลือได้อีก ${Math.max(QUOTA - total, 0)} คะแนน</span>
+  </div>`;
+
+  // unit sub-tabs
+  const tabsHtml = units.map((u, ui) => {
+    const on = activeKey === ui;
+    return `<button type="button" style="border-radius:20px;padding:4px 14px;border:1px solid ${on ? '#6366f1' : '#d1d5db'};background:${on ? '#ede9fe' : '#fff'};color:${on ? '#4f46e5' : '#6b7280'};font-size:13px;cursor:pointer;white-space:nowrap;" onclick="setUnitTab(${t},${ui})">${u.name || `หน่วยที่ ${ui + 1}`}</button>`;
+  }).join('');
+  const examOn = activeKey === 'exam';
+  const examTabHtml = `<button type="button" style="border-radius:20px;padding:4px 14px;border:1px solid ${examOn ? '#d97706' : '#d1d5db'};background:${examOn ? '#fef3c7' : '#fff'};color:${examOn ? '#92400e' : '#6b7280'};font-size:13px;cursor:pointer;white-space:nowrap;" onclick="setUnitTab(${t},'exam')">สอบ ${examScore} คะแนน</button>`;
+  const addBtnHtml = `<button type="button" style="border-radius:20px;padding:4px 14px;border:1px dashed #8b5cf6;background:transparent;color:#7c3aed;font-size:13px;cursor:pointer;" onclick="addSub(${t})">＋ หน่วย</button>`;
+  const tabRowHtml = `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px;">${tabsHtml}${addBtnHtml}${examTabHtml}</div>`;
+
+  // body
+  let bodyHtml = '';
+
+  if (activeKey === 'exam') {
+    const examInds = App.exam?.[t]?.indicators || [];
+    const indGridHtml = allInd.length
+      ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:6px;">${allInd.map(code => {
+          const on = examInds.includes(code);
+          return `<label style="display:flex;align-items:flex-start;gap:6px;padding:5px 8px;border-radius:6px;border:1px solid ${on ? '#fbbf24' : '#e5e7eb'};background:${on ? '#fef3c7' : '#f9fafb'};cursor:pointer;font-size:12px;color:${on ? '#92400e' : '#374151'};">
+            <input type="checkbox" ${on ? 'checked' : ''} style="margin-top:2px;accent-color:#d97706;" onchange="toggleExamIndicator(${t},'${code.replace(/'/g, "\\'")}',this.checked)">
+            <span>${code}</span></label>`;
+        }).join('')}</div>`
+      : `<div style="font-size:12px;color:#9ca3af;">ยังไม่มีตัวชี้วัด — ตั้งค่าในแท็บ "คำอธิบาย/ตัวชี้วัด" ก่อน</div>`;
+
+    bodyHtml = `<div class="p-3 border rounded bg-white" style="border-color:#fbbf24!important;">
+      <div style="font-size:12px;font-weight:500;color:#92400e;padding:5px 10px;background:#fef3c7;border-radius:6px;border:1px solid #fbbf24;margin-bottom:12px;">คะแนนสอบเทอม ${t}</div>
+      <div style="display:flex;align-items:flex-end;gap:10px;margin-bottom:12px;">
+        <div style="display:flex;flex-direction:column;gap:4px;">
+          <label style="font-size:12px;color:#6b7280;">คะแนนสอบ</label>
+          <input type="number" min="0" max="${QUOTA}" step="1" value="${examScore}" style="width:80px;text-align:right;" oninput="App.exam[${t}].score=Number(this.value)||0;updateAutoScoreDisplay();renderSubList(${t});">
+        </div>
+        <span style="font-size:12px;color:#6b7280;padding-bottom:6px;">(เก็บ ${acc} + สอบ = ${QUOTA})</span>
+      </div>
+      <div style="font-size:12px;color:#6b7280;margin-bottom:4px;">ตัวชี้วัดที่ใช้สอบ <span style="color:#9ca3af;">(เลือกได้หลายข้อ)</span></div>
+      ${indGridHtml}
+    </div>`;
+
+  } else {
+    const ui = Number(activeKey);
+    const unit = units[ui];
+    if (!unit) { wrap.innerHTML = barHtml + tabRowHtml; updateAutoScoreDisplay(); return; }
+    const unitInds = Array.isArray(unit.indicators) ? unit.indicators : [];
+
+    const indGridHtml = allInd.length
+      ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:12px;">${allInd.map(code => {
+          const on = unitInds.includes(code);
+          return `<label style="display:flex;align-items:flex-start;gap:6px;padding:5px 8px;border-radius:6px;border:1px solid ${on ? '#93c5fd' : '#e5e7eb'};background:${on ? '#eff6ff' : '#f9fafb'};cursor:pointer;font-size:12px;color:${on ? '#1d4ed8' : '#374151'};">
+            <input type="checkbox" ${on ? 'checked' : ''} style="margin-top:2px;accent-color:#2563eb;" onchange="toggleUnitIndicator(${t},${ui},'${code.replace(/'/g, "\\'")}',this.checked)">
+            <span>${code}</span></label>`;
+        }).join('')}</div>`
+      : `<div style="font-size:12px;color:#9ca3af;margin-bottom:10px;">ยังไม่มีตัวชี้วัด — ตั้งค่าในแท็บ "คำอธิบาย/ตัวชี้วัด" ก่อน</div>`;
+
+    const taskHtml = (unit.items || []).map((item, ii) =>
+      `<div class="d-flex align-items-center gap-2 flex-wrap">
+        <input class="sub-name" type="text" value="${item.name || ''}" placeholder="ชื่องาน" onchange="App.units[${t}][${ui}].items[${ii}].name=this.value">
+        <span class="sub-max-lbl">เต็ม</span>
+        <input class="sub-max" type="number" min="1" value="${Number(item.max) || 0}" onchange="App.units[${t}][${ui}].items[${ii}].max=Number(this.value)||0;renderSubList(${t});">
+        <button class="btn-rm" onclick="rmSubItem(${t},${ui},${ii})">✕</button>
+      </div>`
+    ).join('');
+
+    bodyHtml = `<div class="sub-row p-3 border rounded bg-white" style="display:block;">
       <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
         <span class="sub-n">${ui + 1}.</span>
-        <input class="sub-name" type="text" value="${unit.name || ''}" placeholder="ชื่อหน่วย" onchange="App.units[${t}][${ui}].name=this.value">
+        <input class="sub-name" type="text" value="${unit.name || ''}" placeholder="ชื่อหน่วย" onchange="App.units[${t}][${ui}].name=this.value;renderSubList(${t});">
         <span class="sub-max-lbl">คะแนนเต็ม</span>
-        <input class="sub-max" type="number" min="1" value="${Number(unit.max)||0}" onchange="App.units[${t}][${ui}].max=Number(this.value)||0;updateAutoScoreDisplay();renderSubList(${t});">
-        <button class="btn-rm" onclick="rmSub(${t},${ui})">✕</button>
+        <input class="sub-max" type="number" min="1" value="${Number(unit.max) || 0}" onchange="App.units[${t}][${ui}].max=Number(this.value)||0;updateAutoScoreDisplay();renderSubList(${t});">
+        ${units.length > 1 ? `<button class="btn-rm" onclick="rmSub(${t},${ui})">✕ ลบหน่วย</button>` : ''}
       </div>
-      <div class="ms-4 d-flex flex-column gap-2">
-        ${(unit.items ||[]).map((item, ii) => `<div class="d-flex align-items-center gap-2 flex-wrap">
-          <input class="sub-name" type="text" value="${item.name || ''}" placeholder="ชื่องาน" onchange="App.units[${t}][${ui}].items[${ii}].name=this.value">
-          <span class="sub-max-lbl">เต็ม</span>
-          <input class="sub-max" type="number" min="1" value="${Number(item.max)||0}" onchange="App.units[${t}][${ui}].items[${ii}].max=Number(this.value)||0;renderSubList(${t});">
-          <button class="btn-rm" onclick="rmSubItem(${t},${ui},${ii})">✕</button>
-        </div>`).join('')}
-        <button type="button" class="btn-add-sub" onclick="addSubItem(${t},${ui})">＋ เพิ่มงาน</button>
-      </div>
-      <div class="raw-preview mt-2">คะแนนดิบรวมของงาน: <strong>${ScoreLogic.getUnitRawMax(t, ui)}</strong> | คะแนนที่เก็บเข้าหน่วย: <strong class="res">${Number(unit.max)||0}</strong></div>
+      <div style="font-size:12px;color:#6b7280;margin-bottom:4px;">ตัวชี้วัดของหน่วยนี้ <span style="color:#9ca3af;">(เลือกได้หลายข้อ)</span></div>
+      ${indGridHtml}
+      <hr style="margin:8px 0;border-color:#e5e7eb;">
+      <div class="ms-2 d-flex flex-column gap-2">${taskHtml || '<span style="font-size:13px;color:#9ca3af;">ยังไม่มีงาน</span>'}</div>
+      <button type="button" class="btn-add-sub mt-2" onclick="addSubItem(${t},${ui})">＋ เพิ่มงาน</button>
+      <div class="raw-preview mt-2">คะแนนดิบรวมของงาน: <strong>${ScoreLogic.getUnitRawMax(t, ui)}</strong> | คะแนนที่เก็บเข้าหน่วย: <strong class="res">${Number(unit.max) || 0}</strong></div>
     </div>`;
-  }).join('');
+  }
+
+  wrap.innerHTML = barHtml + tabRowHtml + bodyHtml;
   updateAutoScoreDisplay();
   refreshCourseOverview();
 }
@@ -180,9 +306,11 @@ App.courseInfo = res.config?.courseInfo || {};
       App.units[2] =[];
     }
     App.units[1] = res.config?.units?.t1 || res.config?.subItems?.t1 || [];
-    if (!App.isSemMode) App.units[2] = res.config?.units?.t2 || res.config?.subItems?.t2 ||[];
+    if (!App.isSemMode) App.units[2] = res.config?.units?.t2 || res.config?.subItems?.t2 || [];
 
-    normalizeUnits(1); normalizeUnits(2); renderSubList(1); if (!App.isSemMode) renderSubList(2);
+    normalizeUnits(1); normalizeUnits(2);
+    normalizeExam(1); normalizeExam(2);
+    renderSubList(1); if (!App.isSemMode) renderSubList(2);
     refreshUnitPanelLabels(); updateAutoScoreDisplay(); refreshCourseOverview();
     switchCourseSubTab('basic', $('courseTabBasicBtn'));
 
@@ -493,7 +621,25 @@ function setSchoolProfileForm(p = {}) {
 }
 
 function buildConfigPayload() {
-  return { t1_acc: ScoreLogic.getUnitsMax(1), t1_exam: ScoreLogic.getExamMax(1), t2_acc: App.isSemMode ? 0 : ScoreLogic.getUnitsMax(2), t2_exam: App.isSemMode ? 0 : ScoreLogic.getExamMax(2), units: { t1: App.units[1], t2: App.units[2] }, subItems: { t1: [], t2:[] }, rawMax: { t1: 0, t2: 0 }, courseInfo: getCourseInfoForm() };
+  // แนบ indicators กลับเข้า units (ถ้ามี)
+  const unitsWithInd = (t) => (App.units[t] || []).map(u => ({
+    ...u,
+    indicators: Array.isArray(u.indicators) ? u.indicators : []
+  }));
+  return {
+    t1_acc: ScoreLogic.getUnitsMax(1),
+    t1_exam: ScoreLogic.getExamMax(1),
+    t2_acc: App.isSemMode ? 0 : ScoreLogic.getUnitsMax(2),
+    t2_exam: App.isSemMode ? 0 : ScoreLogic.getExamMax(2),
+    units: { t1: unitsWithInd(1), t2: unitsWithInd(2) },
+    subItems: { t1: [], t2: [] },
+    rawMax: { t1: 0, t2: 0 },
+    exam: {
+      1: { score: App.exam?.[1]?.score ?? ScoreLogic.getExamMax(1), indicators: App.exam?.[1]?.indicators ?? [] },
+      2: { score: App.exam?.[2]?.score ?? ScoreLogic.getExamMax(2), indicators: App.exam?.[2]?.indicators ?? [] }
+    },
+    courseInfo: getCourseInfoForm()
+  };
 }
 
 async function saveGrades() {
