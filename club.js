@@ -7,6 +7,7 @@ const Club = {
   clubName: '',
   teacher: '',
   dayOfWeek: '5',
+  dates: [],            // วันที่กรองจากช่วงเทอม + วันที่เลือก
   members: [],          // { studentId, name, classroom }
   topics: [],           // ['หัวข้อครั้งที่ 1', ...]
   attMap: {},           // { studentId: ['ป','ข','ล',...] }
@@ -23,6 +24,57 @@ function _clubShortDate(dStr) {
   const p = String(dStr).split('/');
   if (p.length !== 3) return dStr;
   return parseInt(p[0]) + ' ' + m[parseInt(p[1])-1] + ' ' + String(p[2]).slice(-2);
+}
+
+// ── คำนวณวันที่ชุมนุม (กรองจากช่วงเทอม + วันที่เลือก + ตัดวันหยุด) ──
+function calcClubDates() {
+  const term      = Club.term;
+  const dayOfWeek = parseInt(Club.dayOfWeek);
+  const startD    = App.termDates['t' + term + '_start'];
+  const endD      = App.termDates['t' + term + '_end'];
+  if (!startD || !endD) return [];
+
+  function parseD(str) {
+    const p = String(str).split(/[\/\-]/);
+    if (p.length !== 3) return new Date();
+    const y = parseInt(p[2]) > 2500 ? parseInt(p[2]) - 543 : parseInt(p[2]);
+    return new Date(y, parseInt(p[1]) - 1, parseInt(p[0]));
+  }
+
+  const hSet = new Set(
+    (App.holidays || []).filter(h => h.type === 'holiday').map(h => h.date)
+  );
+  const dates = [];
+  const cur = parseD(startD), end = parseD(endD);
+  cur.setHours(0,0,0,0); end.setHours(0,0,0,0);
+  while (cur <= end) {
+    if (cur.getDay() === dayOfWeek) {
+      const dd = String(cur.getDate()).padStart(2,'0');
+      const mm = String(cur.getMonth()+1).padStart(2,'0');
+      const yy = cur.getFullYear() + 543;
+      const key = `${dd}/${mm}/${yy}`;
+      if (!hSet.has(key)) dates.push(key);
+    }
+    cur.setDate(cur.getDate() + 1);
+  }
+  return dates;
+}
+
+function refreshClubDates() {
+  Club.dates = calcClubDates();
+  // sync topics ให้ตรงกับจำนวนวัน (ถ้า topics ยังไม่ถูก set จากที่บันทึกไว้)
+  if (Club.topics.length === 0 && Club.dates.length > 0) {
+    Club.topics = Club.dates.map((d, i) => '');
+  } else if (Club.topics.length !== Club.dates.length && Club.topics.length === 0) {
+    Club.topics = Array(Club.dates.length).fill('');
+  }
+  // ขยาย attMap ให้ครบทุกวัน
+  Club.members.forEach(m => {
+    if (!Club.attMap[m.studentId]) Club.attMap[m.studentId] = [];
+    while (Club.attMap[m.studentId].length < Club.dates.length) Club.attMap[m.studentId].push('ป');
+    Club.attMap[m.studentId] = Club.attMap[m.studentId].slice(0, Club.dates.length);
+  });
+  _renderClubActivity();
 }
 
 function renderClubPanel() {
@@ -153,6 +205,7 @@ async function loadSavedClub() {
       });
     } catch(e) { /* ยังไม่มีกิจกรรม — ไม่ error */ }
 
+    Club.dates = calcClubDates();
     Utils.toast(`✅ โหลดชุมนุม "${Club.clubName}" ${savedMembers.length} คน`);
     _renderClubMain();
   } catch(e) { Utils.toast(e.message, 'error'); }
@@ -195,7 +248,7 @@ function _renderClubMain() {
         </div>
         <div style="flex:0;min-width:100px;">
           <label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px;">วันเรียน</label>
-          <select class="cfg-n" style="width:100%;" onchange="Club.dayOfWeek=this.value">
+          <select class="cfg-n" style="width:100%;" onchange="Club.dayOfWeek=this.value;refreshClubDates()">
             ${['จันทร์','อังคาร','พุธ','พฤหัส','ศุกร์'].map((d,i) =>
               `<option value="${i+1}" ${Club.dayOfWeek==i+1?'selected':''}>${d}</option>`
             ).join('')}
@@ -259,7 +312,10 @@ function _renderClubMain() {
   `;
 
   if (Club.loaded) _renderClubStudentPicker();
-  if (memberCount > 0) _renderClubActivity();
+  if (memberCount > 0) {
+    if (Club.dates.length === 0) Club.dates = calcClubDates();
+    _renderClubActivity();
+  }
 }
 
 // ── tab เลือกนักเรียน ────────────────────────────────
@@ -333,17 +389,22 @@ function toggleClubMember(sid, name, classroom) {
 // ── ส่วนบันทึกกิจกรรม (เหมือน guidance) ─────────────
 function _renderClubActivity() {
   const wrap = $('clubActivitySection'); if (!wrap) return;
-  const topics   = Club.topics;
-  const nTopics  = topics.length;
-  const members  = Club.members;
+  const dates   = Club.dates;
+  const nDates  = dates.length;
+  const topics  = Club.topics.length === nDates ? Club.topics : Array(nDates).fill('');
+  Club.topics   = topics;
+  const members = Club.members;
+
+  const noTermDates = !App.termDates || !App.termDates['t' + Club.term + '_start'];
 
   // ── ส่วน 1: ตารางบันทึกหัวข้อกิจกรรม ──
-  const actRows = topics.map((tp, i) =>
+  const actRows = dates.map((d, i) =>
     `<tr>
       <td style="text-align:center;border:1px solid #fde68a;padding:5px;color:#92400e;font-size:.8rem;">${i+1}</td>
+      <td style="border:1px solid #fde68a;padding:4px 8px;text-align:center;color:#6d28d9;font-size:.82rem;white-space:nowrap;">${_clubShortDate(d)}</td>
       <td style="border:1px solid #fde68a;padding:2px 4px;">
-        <input type="text" class="club-topic" data-idx="${i}" value="${tp}"
-          placeholder="หัวข้อกิจกรรม/ครั้งที่ ${i+1}..."
+        <input type="text" class="club-topic" data-idx="${i}" value="${topics[i]||''}"
+          placeholder="หัวข้อกิจกรรม..."
           oninput="Club.topics[${i}]=this.value"
           style="width:100%;border:none;background:transparent;font-family:inherit;font-size:.84rem;padding:4px 6px;outline:none;">
       </td>
@@ -351,18 +412,19 @@ function _renderClubActivity() {
   ).join('');
 
   // ── ส่วน 2: header วันที่/ครั้งที่ ──
-  const colHeaders = topics.map((tp, i) =>
-    `<th style="width:26px;vertical-align:bottom;padding-bottom:4px;border:1px solid #fde68a;background:#fefce8;">
-      <div style="writing-mode:vertical-rl;transform:rotate(180deg);font-size:10px;font-weight:600;color:#92400e;white-space:nowrap;height:60px;">
-        ${i+1}. ${tp.slice(0,8)||'ครั้งที่'+(i+1)}
+  const colHeaders = dates.map((d, i) => {
+    const p = d.split('/');
+    return `<th style="width:26px;vertical-align:bottom;padding-bottom:4px;border:1px solid #fde68a;background:#fefce8;">
+      <div style="writing-mode:vertical-rl;transform:rotate(180deg);font-size:10px;font-weight:600;color:#92400e;white-space:nowrap;height:70px;">
+        ${parseInt(p[0])} ${['','ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'][parseInt(p[1])]} ${p[2].slice(-2)}
       </div>
-    </th>`
-  ).join('');
+    </th>`;
+  }).join('');
 
   // ── ส่วน 2: แถวนักเรียน ──
   const attRows = members.map((m, idx) => {
-    const att = Club.attMap[m.studentId] || Array(nTopics).fill('ป');
-    while (att.length < nTopics) att.push('ป');
+    const att = Club.attMap[m.studentId] || Array(nDates).fill('ป');
+    while (att.length < nDates) att.push('ป');
     Club.attMap[m.studentId] = att;
 
     const nP    = att.filter(v => v === 'ป').length;
@@ -370,7 +432,7 @@ function _renderClubActivity() {
     const result = Club.resultMap[m.studentId] ||
       (nBase > 0 && nP >= Math.ceil(nBase * 0.8) ? 'ผ่าน' : 'ไม่ผ่าน');
 
-    const cells = att.slice(0, nTopics).map((v, i) => {
+    const cells = att.slice(0, nDates).map((v, i) => {
       const st = v === 'ข'
         ? { bg:'#fee2e2', cl:'#dc2626', lb:'ข' }
         : v === 'ล'
@@ -424,7 +486,8 @@ function _renderClubActivity() {
         <table style="width:100%;border-collapse:collapse;font-size:.84rem;">
           <thead style="position:sticky;top:0;background:#fefce8;">
             <tr>
-              <th style="width:50px;border:1px solid #fde68a;padding:6px;">ครั้งที่</th>
+              <th style="width:46px;border:1px solid #fde68a;padding:6px;">ครั้งที่</th>
+              <th style="width:90px;border:1px solid #fde68a;padding:6px;">วันที่</th>
               <th style="border:1px solid #fde68a;padding:6px;text-align:left;">หัวข้อกิจกรรม</th>
             </tr>
           </thead>
@@ -433,19 +496,16 @@ function _renderClubActivity() {
       </div>
     </div>` : ''}
 
-    <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">
-      <input type="text" id="clubTopicInp" class="cfg-n"
-        style="flex:1;text-align:left;min-width:160px;" placeholder="หัวข้อกิจกรรม/ครั้งที่ ${nTopics+1}...">
-      <button class="btn-sm" onclick="addClubTopic()" style="white-space:nowrap;">+ เพิ่มครั้ง</button>
-      ${nTopics > 0 ? `<button class="btn-sm" style="color:#ef4444;border-color:#fecaca;" onclick="removeLastClubTopic()">ลบล่าสุด</button>` : ''}
-    </div>
 
-    ${members.length > 0 && nTopics > 0 ? `
+
+    ${noTermDates ? `
+    <div style="font-size:13px;color:#d97706;padding:8px;background:#fef3c7;border-radius:6px;border:1px solid #fde68a;">
+      ⚠️ ยังไม่พบวันเปิด-ปิดเทอม — กรุณาโหลดตารางคะแนนก่อน หรือเลือกชั้นเรียนให้ถูกต้อง
+    </div>` : members.length > 0 && nDates > 0 ? `
     <div>
       <div style="font-weight:700;font-size:.86rem;color:#0369a1;padding:8px 12px;
                   background:#eff6ff;border-radius:8px 8px 0 0;border:1px solid #bae6fd;border-bottom:none;">
-        ✅ ตารางการเข้าร่วม
-        <span style="font-size:.72rem;font-weight:400;color:#64748b;margin-left:8px;">(คลิก: ✓มา → ขขาด → ลลา)</span>
+        ✅ ตารางการเข้าร่วม <span style="font-weight:400;color:#64748b;font-size:.72rem;">(${nDates} ครั้ง — คลิก: ✓มา → ขขาด → ลลา)</span>
       </div>
       <div style="border:1px solid #bae6fd;border-radius:0 0 8px 8px;overflow:auto;max-height:55vh;">
         <table style="border-collapse:collapse;font-size:.82rem;width:max-content;min-width:100%;">
@@ -453,7 +513,7 @@ function _renderClubActivity() {
             <tr>
               <th rowspan="2" style="width:28px;position:sticky;left:0;z-index:30;background:#f0f9ff;border:1px solid #fde68a;">ที่</th>
               <th rowspan="2" style="min-width:150px;text-align:left;padding-left:8px;position:sticky;left:28px;z-index:30;background:#f0f9ff;border:1px solid #fde68a;border-right:2px solid #fde68a;">ชื่อ-นามสกุล</th>
-              <th colspan="${nTopics}" style="border:1px solid #fde68a;background:#fef3c7;font-size:.8rem;">ครั้งที่เข้าร่วม</th>
+              <th colspan="${nDates}" style="border:1px solid #fde68a;background:#fef3c7;font-size:.8rem;">วันที่เข้าร่วมกิจกรรม</th>
               <th rowspan="2" style="width:50px;border:1px solid #fde68a;background:#eff6ff;font-size:.76rem;">มา/รวม</th>
               <th rowspan="2" style="width:86px;border:1px solid #fde68a;background:#f0fdf4;font-size:.76rem;">ผลประเมิน</th>
             </tr>
@@ -462,7 +522,7 @@ function _renderClubActivity() {
           <tbody id="clubAttBody">${attRows}</tbody>
         </table>
       </div>
-    </div>` : members.length > 0 ? `<div style="font-size:13px;color:#9ca3af;padding:8px 0;">กด "+ เพิ่มครั้ง" เพื่อเริ่มบันทึกกิจกรรม</div>` : ''}
+    </div>` : members.length > 0 ? `<div style="font-size:13px;color:#9ca3af;padding:8px 0;">ยังไม่พบวันกิจกรรม — ตรวจสอบวันเรียนและช่วงเทอม</div>` : ''}
   `;
 }
 
@@ -566,6 +626,7 @@ async function saveClubData() {
       teacher:   Club.teacher,
       dayOfWeek: Club.dayOfWeek,
       topics:    Club.topics,
+      dates:     Club.dates,
       records
     });
     Utils.toast('✅ ' + res);
