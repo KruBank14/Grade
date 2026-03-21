@@ -1281,6 +1281,24 @@ body{
   }
 }
 
+
+.indicator-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;}
+.indicator-group{background:#fafafa;border:1px solid #e5e7eb;border-radius:12px;padding:10px 12px;}
+.indicator-group-title{font-weight:800;font-size:.84rem;margin-bottom:8px;display:flex;align-items:center;gap:6px;}
+.indicator-group-title small{font-weight:600;color:var(--muted);}
+.indicator-list{display:flex;flex-direction:column;gap:7px;max-height:240px;overflow:auto;padding-right:2px;}
+.indicator-item{display:flex;align-items:flex-start;gap:8px;background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:7px 9px;}
+.indicator-item input{margin-top:3px;transform:scale(1.05);}
+.indicator-item-text{font-size:.82rem;line-height:1.45;color:#334155;}
+.indicator-empty{border:1px dashed #cbd5e1;background:#f8fafc;color:#64748b;border-radius:10px;padding:12px;text-align:center;font-size:.82rem;}
+.unit-meta-grid{display:grid;grid-template-columns:1fr;gap:10px;margin-top:10px;}
+.unit-meta-card{background:#faf5ff;border:1px solid #ddd6fe;border-radius:12px;padding:10px 12px;}
+.unit-meta-title{font-weight:800;font-size:.84rem;color:#6d28d9;margin-bottom:8px;}
+.unit-meta-note{font-size:.78rem;color:#64748b;margin-top:6px;}
+.indicator-badge-list{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
+.indicator-badge{display:inline-flex;align-items:center;gap:4px;padding:4px 9px;border-radius:999px;font-size:.74rem;font-weight:700;}
+.indicator-badge.formative{background:#dbeafe;color:#1d4ed8;}
+.indicator-badge.summative{background:#fef3c7;color:#b45309;}
 @media (max-width:600px){
   .sub-row{flex-wrap:wrap;gap:6px;}
   .sub-name{width:100%;flex:none;}
@@ -1627,10 +1645,18 @@ body{
 
     <div class="cfg-row mb-3">
       <div class="cfg-block" style="flex:1;min-width:280px;">
-        <label class="cfg-ttl">ตัวชี้วัด / ผลการเรียนรู้</label>
-        <textarea id="ci_indicators" class="cfg-n" 
+        <label class="cfg-ttl">ตัวชี้วัดระหว่างทาง</label>
+        <textarea id="ci_indicators_formative" class="cfg-n" 
           style="width:100%;text-align:left;min-height:180px;resize:vertical;line-height:1.6;padding:10px;" 
-          placeholder="ใส่ตัวชี้วัด / ผลการเรียนรู้..."></textarea>
+          placeholder="ใส่ตัวชี้วัดระหว่างทาง 1 บรรทัดต่อ 1 ข้อ&#10;เช่น ศ 1.1 ป.1/1 ..."></textarea>
+        <small style="color:var(--muted);display:block;margin-top:6px;">แนะนำให้ใส่ 1 บรรทัด ต่อ 1 ตัวชี้วัด</small>
+      </div>
+      <div class="cfg-block" style="flex:1;min-width:280px;">
+        <label class="cfg-ttl">ตัวชี้วัดปลายทาง</label>
+        <textarea id="ci_indicators_summative" class="cfg-n" 
+          style="width:100%;text-align:left;min-height:180px;resize:vertical;line-height:1.6;padding:10px;" 
+          placeholder="ใส่ตัวชี้วัดปลายทาง 1 บรรทัดต่อ 1 ข้อ&#10;เช่น ศ 1.1 ป.1/4 ..."></textarea>
+        <small style="color:var(--muted);display:block;margin-top:6px;">ใช้สำหรับสรุปผลช่วงปลายหน่วย / ปลายภาค</small>
       </div>
     </div>
 
