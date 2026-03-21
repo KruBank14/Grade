@@ -11,6 +11,7 @@ const Club = {
   attendanceMap: {},    // studentId → { attArray, result, attended }
   topics: [],
   allClassStudents: {}, // { 'ป.1': [{studentId,name,inOtherClub,clubName},...], ... }
+  loadErrors: {},       // { 'ป.1': 'error message', ... }
   activeClassTab: '',
   loaded: false
 };
@@ -29,12 +30,20 @@ function switchClubTab(term, btn) {
   document.querySelectorAll('#clubTabs .ttab').forEach(b => b.classList.remove('on'));
   if (btn) btn.classList.add('on');
   Club.allClassStudents = {};
+  Club.loadErrors = {};
   Club.loaded = false;
   _renderClubMain();
 }
 
 async function loadAllClubStudents() {
   const year = $('gYear').value;
+
+  // ตรวจสอบปีก่อนโหลด
+  if (!year) {
+    Utils.toast('กรุณาเลือกปีการศึกษาก่อน', 'error');
+    return;
+  }
+
   const t = Club.term;
   const classes = CONFIG.ALL_CLS.filter(c => !c.includes('เทอม'));
   Utils.showLoading('โหลดรายชื่อทุกชั้น...');
@@ -42,12 +51,34 @@ async function loadAllClubStudents() {
     const results = await Promise.all(
       classes.map(cls =>
         api('getClubStudentsForClass', { year, classroom: cls, term: t })
-          .then(res => ({ cls, students: res.students || [] }))
-          .catch(() => ({ cls, students: [] }))
+          .then(res => ({ cls, students: res.students || [], error: null }))
+          .catch(e => ({ cls, students: [], error: e.message || 'โหลดไม่สำเร็จ' }))
       )
     );
+
     Club.allClassStudents = {};
-    results.forEach(({ cls, students }) => { Club.allClassStudents[cls] = students; });
+    Club.loadErrors = {};
+
+    results.forEach(({ cls, students, error }) => {
+      Club.allClassStudents[cls] = students;
+      if (error) Club.loadErrors[cls] = error;
+    });
+
+    // นับจำนวนชั้นที่โหลดสำเร็จ / ล้มเหลว
+    const successCount = results.filter(r => !r.error && r.students.length > 0).length;
+    const failCount    = results.filter(r => !!r.error).length;
+
+    if (successCount === 0 && failCount > 0) {
+      // ทุกชั้นโหลดไม่ได้เลย — แสดง error ของชั้นแรก
+      const firstError = results.find(r => r.error);
+      Utils.toast('โหลดรายชื่อไม่สำเร็จ: ' + firstError.error, 'error');
+    } else if (failCount > 0) {
+      Utils.toast(`⚠️ โหลดสำเร็จ ${successCount} ชั้น, ไม่สำเร็จ ${failCount} ชั้น`, 'error');
+    } else {
+      Utils.toast(`✅ โหลดรายชื่อสำเร็จ ${successCount} ชั้น`);
+    }
+
+    // เลือก tab ชั้นแรกที่มีรายชื่อ
     const firstCls = classes.find(c => (Club.allClassStudents[c] || []).length > 0) || classes[0];
     Club.activeClassTab = firstCls;
     Club.loaded = true;
@@ -162,20 +193,35 @@ function _renderClubStudentPicker() {
   const activeCls = Club.activeClassTab || classes[0];
 
   const tabsHtml = classes.map(cls => {
-    const selected = Club.members.filter(m => m.classroom === cls).length;
-    const on = cls === activeCls;
+    const selected  = Club.members.filter(m => m.classroom === cls).length;
+    const hasError  = !!Club.loadErrors[cls];
+    const on        = cls === activeCls;
+    const borderCol = on ? '#d97706' : hasError ? '#fca5a5' : '#e5e7eb';
+    const bgCol     = on ? '#fef3c7' : hasError ? '#fff1f2' : '#fff';
+    const textCol   = on ? '#92400e' : hasError ? '#b91c1c' : '#6b7280';
     return `<button type="button"
       style="padding:4px 12px;border-radius:20px;white-space:nowrap;cursor:pointer;font-size:12px;
-        border:1px solid ${on?'#d97706':'#e5e7eb'};background:${on?'#fef3c7':'#fff'};color:${on?'#92400e':'#6b7280'};"
-      onclick="switchClubClassTab('${cls}')">
-      ${cls}${selected>0?` <span style="background:#d97706;color:#fff;border-radius:10px;padding:0 5px;font-size:11px;">${selected}</span>`:''}
+        border:1px solid ${borderCol};background:${bgCol};color:${textCol};"
+      onclick="switchClubClassTab('${cls}')"
+      title="${hasError ? Club.loadErrors[cls] : ''}">
+      ${cls}${hasError ? ' ⚠️' : ''}${selected > 0 ? ` <span style="background:#d97706;color:#fff;border-radius:10px;padding:0 5px;font-size:11px;">${selected}</span>` : ''}
     </button>`;
   }).join('');
 
-  const students = Club.allClassStudents[activeCls] || [];
-  const chipsHtml = students.length === 0
-    ? `<div style="font-size:12px;color:#9ca3af;padding:6px 0;">ไม่พบรายชื่อ</div>`
-    : `<div style="display:flex;flex-wrap:wrap;gap:6px;padding:6px 0;">` +
+  const students   = Club.allClassStudents[activeCls] || [];
+  const errorMsg   = Club.loadErrors[activeCls];
+
+  let chipsHtml;
+  if (errorMsg) {
+    // แสดง error message แทน "ไม่พบรายชื่อ"
+    chipsHtml = `<div style="font-size:12px;color:#b91c1c;padding:8px;background:#fff1f2;border-radius:6px;border:1px solid #fecaca;">
+      ⚠️ โหลดรายชื่อชั้น ${activeCls} ไม่สำเร็จ<br>
+      <span style="color:#6b7280;font-size:11px;">${errorMsg}</span>
+    </div>`;
+  } else if (students.length === 0) {
+    chipsHtml = `<div style="font-size:12px;color:#9ca3af;padding:6px 0;">ไม่พบรายชื่อ</div>`;
+  } else {
+    chipsHtml = `<div style="display:flex;flex-wrap:wrap;gap:6px;padding:6px 0;">` +
       students.map(s => {
         const inMyClub = Club.members.some(m => m.studentId === s.studentId);
         const inOther  = s.inOtherClub && !inMyClub;
@@ -191,6 +237,7 @@ function _renderClubStudentPicker() {
           ${check}${s.name}${tag}
         </div>`;
       }).join('') + `</div>`;
+  }
 
   wrap.innerHTML = `
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">${tabsHtml}</div>
