@@ -47,18 +47,22 @@ async function loadAllClubStudents() {
   }
 
   const t       = Club.term;
-  const classes = CONFIG.ALL_CLS.filter(c => !c.includes('เทอม'));
+  const classes = [...new Set(CONFIG.ALL_CLS.map(c => c.replace(/ เทอม [12]/g, '').trim()))];
 
   Utils.showLoading('โหลดรายชื่อทุกชั้น...');
   try {
     const results = await Promise.all(
       classes.map(async cls => {
-        const subs = App.subs[cls] || [];
-        if (!subs.length) return { cls, students: [], error: null }; // ชั้นที่ไม่มีวิชา → ข้าม
+        // มัธยม key ใน App.subs คือ "ม.1 เทอม 1" ไม่ใช่ "ม.1"
+        // หา subject จาก key ที่ขึ้นต้นด้วยชั้นนั้น
+        const subsKey = Object.keys(App.subs).find(k => k === cls || k.startsWith(cls + ' '));
+        const subs = subsKey ? (App.subs[subsKey] || []) : [];
+        const classroomKey = subsKey || cls; // ใช้ key จริงตอนยิง getGrades
+        if (!subs.length) return { cls, students: [], error: null };
 
         // ยิง getGrades วิชาแรกของชั้นนั้น → ได้ students[]
         try {
-          const res = await api('getGrades', { year, classroom: cls, subject: subs[0] });
+          const res = await api('getGrades', { year, classroom: classroomKey, subject: subs[0] });
           const students = (res.students || []).map(s => ({
             studentId:   s.studentId,
             name:        s.name,
@@ -212,7 +216,7 @@ function _renderClubMain() {
 // ── แสดง tab ทุกชั้น + ชิปนักเรียนของชั้นที่เลือก ──
 function _renderClubStudentPicker() {
   const wrap = $('clubStudentPicker'); if (!wrap) return;
-  const classes   = CONFIG.ALL_CLS.filter(c => !c.includes('เทอม'));
+  const classes   = [...new Set(CONFIG.ALL_CLS.map(c => c.replace(/ เทอม [12]/g, '').trim()))];
   const activeCls = Club.activeClassTab || classes[0];
 
   // ── tabs ──
