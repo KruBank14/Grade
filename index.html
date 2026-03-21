@@ -1310,27 +1310,15 @@ body{
             <span class="tab-label">ประเมิน</span>
           </button>
 
-          <!-- แท็บใหม่: อ่าน คิดวิเคราะห์ เขียน -->
-<button type="button" class="settings-tab" onclick="switchSettingsTab('rtw', this)">
-  
-  <span class="tab-icon">📖</span>
-  <span class="tab-label">อ่าน/คิด/เขียน</span>
-</button>
+          <button type="button" class="settings-tab" onclick="switchSettingsTab('activities', this)">
+            <span class="tab-icon">🎯</span>
+            <span class="tab-label">กิจกรรม</span>
+          </button>
 
           <button type="button" class="settings-tab" onclick="switchSettingsTab('schoolProfile', this)">
             <span class="tab-icon">🏫</span>
             <span class="tab-label">โรงเรียน</span>
           </button>
-
-          <!-- เพิ่มแท็บแนะแนวเข้าไปในเมนู -->
-<button type="button" class="settings-tab" onclick="switchSettingsTab('guidance', this)">
-  <span class="tab-icon">🧭</span>
-  <span class="tab-label">แนะแนว</span>
-</button>
-<button type="button" class="settings-tab" onclick="switchSettingsTab('scout', this)">
-  <span class="tab-icon">⚜️</span>
-  <span class="tab-label">ลูกเสือ</span>
-</button>
           <button type="button" class="settings-tab" onclick="switchSettingsTab('homeroom', this)">
             <span class="tab-icon">🏠</span>
             <span class="tab-label">ครูประจำชั้น</span>
@@ -1819,6 +1807,30 @@ body{
     </button>
   </div>
 </div>
+
+<!-- ===== TAB: กิจกรรม (รวม อ่าน/คิด/เขียน + แนะแนว + ลูกเสือ) ===== -->
+<div class="settings-panel" id="panel_activities">
+
+  <!-- sub-tabs -->
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+    <button type="button" id="actTab_rtw" class="ttab on" onclick="switchActivityTab('rtw',this)">
+      📖 อ่าน/คิด/เขียน
+    </button>
+    <button type="button" id="actTab_guidance" class="ttab" onclick="switchActivityTab('guidance',this)">
+      🧭 แนะแนว
+    </button>
+    <button type="button" id="actTab_scout" class="ttab" onclick="switchActivityTab('scout',this)">
+      ⚜️ ลูกเสือ
+    </button>
+  </div>
+
+  <!-- sub-panels -->
+  <div id="actPanel_rtw"></div>
+  <div id="actPanel_guidance" style="display:none;"></div>
+  <div id="actPanel_scout" style="display:none;"></div>
+
+</div>
+
     <!-- ===== TAB: ประเมินการอ่าน คิดวิเคราะห์ และเขียน (100 คะแนน) ===== -->
 <div class="settings-panel" id="panel_rtw">
   <div class="card mb-3" style="background:#f0f9ff; border:1px solid #bae6fd;">
@@ -2040,5 +2052,38 @@ body{
 <script src="rtw.js"></script>
 <script src="guidance.js"></script>
 <script src="scout.js"></script>
+<script>
+// ── กิจกรรม sub-tab ──
+function switchActivityTab(key, btn) {
+  ['rtw','guidance','scout'].forEach(k => {
+    const p = document.getElementById('actPanel_' + k);
+    const t = document.getElementById('actTab_' + k);
+    if (p) p.style.display = k === key ? '' : 'none';
+    if (t) t.classList.toggle('on', k === key);
+  });
+  // sync content จาก panel เดิมเข้า actPanel
+  _syncActivityPanel(key);
+}
+
+function _syncActivityPanel(key) {
+  const src  = document.getElementById('panel_' + key);
+  const dest = document.getElementById('actPanel_' + key);
+  if (!src || !dest) return;
+  if (dest.children.length === 0) {
+    // ย้าย children ครั้งแรก
+    while (src.firstChild) dest.appendChild(src.firstChild);
+  }
+}
+
+// เมื่อ panel_activities ถูกเปิด ให้ sync sub-panel แรก
+const _origSwitch = window.switchSettingsTab;
+window.switchSettingsTab = function(tid, btn) {
+  _origSwitch(tid, btn);
+  if (tid === 'activities') {
+    // sync rtw ก่อน (default tab)
+    _syncActivityPanel('rtw');
+  }
+};
+</script>
 </body>
 </html>
