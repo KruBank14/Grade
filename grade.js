@@ -40,19 +40,7 @@ const ScoreLogic = {
 // =====================================================
 function normalizeUnits(t) {
   if (!Array.isArray(App.units[t])) App.units[t] = [];
-  App.units[t] = App.units[t].map((u, idx) => {
-    const items = Array.isArray(u?.items) ? u.items.map((item, ii) => ({
-      name: item?.name || `งาน ${ii + 1}`,
-      max: Number(item?.max) || 0
-    })) : [{ name: "งาน 1", max: Number(u?.max) || 10 }];
-
-    return {
-      name: u?.name || `หน่วยที่ ${idx + 1}`,
-      max: Number(u?.max) || 0,
-      items,
-      indicators: Array.isArray(u?.indicators) ? [...new Set(u.indicators.map(String))] : []
-    };
-  });
+  App.units[t] = App.units[t].map((u, idx) => (u && Array.isArray(u.items) ? u : { name: u?.name || `หน่วยที่ ${idx + 1}`, max: Number(u?.max) || 10, items:[{ name: u?.name || 'งาน 1', max: Number(u?.max) || 10 }] }));
 }
 
 function updateAutoScoreDisplay() {
@@ -71,7 +59,9 @@ function refreshUnitPanelLabels() {
   if ($('t2AutoBlock')) $('t2AutoBlock').style.display = App.isSemMode ? 'none' : 'flex';
   if ($('tabTerm2Btn')) $('tabTerm2Btn').style.display = App.isSemMode ? 'none' : 'block';
   updateAutoScoreDisplay();
+  refreshCourseOverview();
 }
+
 
 function switchTerm(t, btn) {
   if (btn?.closest('.ttabs')) btn.closest('.ttabs').querySelectorAll('.ttab').forEach(b => b.classList.remove('on'));
@@ -79,303 +69,77 @@ function switchTerm(t, btn) {
   $('subPanel_1').style.display = t === 1 ? '' : 'none'; $('subPanel_2').style.display = t === 2 ? '' : 'none';
 }
 
-function normalizeIndicatorBuckets(indicators) {
-  if (indicators && typeof indicators === 'object' && !Array.isArray(indicators)) {
-    const formative = Array.isArray(indicators.formative) ? indicators.formative : [];
-    const summative = Array.isArray(indicators.summative) ? indicators.summative : [];
-    return {
-      formative: formative.map(v => String(v || '').trim()).filter(Boolean),
-      summative: summative.map(v => String(v || '').trim()).filter(Boolean)
-    };
-  }
 
-  const legacy = String(indicators || '')
-    .split(/\r?\n/)
-    .map(v => v.trim())
-    .filter(Boolean);
-
-  return { formative: legacy, summative: [] };
-}
-
-function getIndicatorCatalog() {
-  const formative = String($('ci_indicators_formative')?.value || '').split(/\r?\n/).map(v => v.trim()).filter(Boolean);
-  const summative = String($('ci_indicators_summative')?.value || '').split(/\r?\n/).map(v => v.trim()).filter(Boolean);
-  return [
-    ...formative.map((text, idx) => ({ key: `F${idx + 1}`, text, type: 'formative', label: `ระหว่างทาง ${idx + 1}` })),
-    ...summative.map((text, idx) => ({ key: `S${idx + 1}`, text, type: 'summative', label: `ปลายทาง ${idx + 1}` }))
-  ];
-}
-
-function getIndicatorMap() {
-  return Object.fromEntries(getIndicatorCatalog().map(item => [item.key, item]));
-}
-
-function getUnitIndicatorBadges(unit) {
-  const imap = getIndicatorMap();
-  return (unit?.indicators || []).map(key => imap[key]).filter(Boolean);
-}
-
-function getIndicatorUsageOverview() {
-  const catalog = getIndicatorCatalog();
-  const byKey = Object.fromEntries(catalog.map(item => [item.key, { ...item, units: [] }]));
-  const terms = App.isSemMode ? [1] : [1, 2];
-
-  terms.forEach(t => {
-    (App.units?.[t] || []).forEach((unit, ui) => {
-      const unitName = String(unit?.name || `หน่วย ${ui + 1}`).trim() || `หน่วย ${ui + 1}`;
-      const keys = Array.isArray(unit?.indicators) ? [...new Set(unit.indicators.map(String))] : [];
-      keys.forEach(key => {
-        if (!byKey[key]) return;
-        byKey[key].units.push({
-          term: t,
-          unitIndex: ui,
-          unitName,
-          shortLabel: `ท${t} · ${unitName}`
-        });
-      });
-    });
+function switchCourseSubTab(key, btn) {
+  document.querySelectorAll('.course-subtab').forEach(b => b.classList.remove('on'));
+  if (btn) btn.classList.add('on');
+  ['basic','desc','schedule','units'].forEach(k => {
+    const el = document.getElementById(`coursePanel_${k}`);
+    if (el) el.style.display = (k === key ? '' : 'none');
   });
+}
 
-  const all = Object.values(byKey);
+function goCourseSubTab(key) {
+  const map = {
+    basic: 'courseTabBasicBtn',
+    desc: 'courseTabDescBtn',
+    schedule: 'courseTabScheduleBtn',
+    units: 'courseTabUnitsBtn'
+  };
+  switchCourseSubTab(key, $(map[key]));
+}
+
+function getIndicatorBucketsFromForm() {
+  const normalize = txt => String(txt || '').split(/\r?\n/).map(v => v.trim()).filter(Boolean);
   return {
-    total: all.length,
-    used: all.filter(item => item.units.length),
-    unused: all.filter(item => !item.units.length)
+    formative: normalize($('ci_indicators_formative')?.value || ''),
+    summative: normalize($('ci_indicators_summative')?.value || '')
   };
 }
 
-function jumpToUnitFromCoverage(term, unitIndex) {
-  if (!App.units?.[term]?.[unitIndex]) return;
-
-  const tabBtn = term === 2 ? $('tabTerm2Btn') : document.querySelector('.ttabs .ttab');
-  switchTerm(term, tabBtn || null);
-  App.activeUnitTab[term] = unitIndex;
-  renderSubList(term);
-
-  setTimeout(() => {
-    const panel = $(`subPanel_${term}`);
-    const target = $(`unitEditor_${term}`) || panel;
-    if (target?.scrollIntoView) {
-      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-  }, 40);
+function refreshCourseOverview() {
+  const put = (id, val) => { const el = $(id); if (el) el.textContent = val || '-'; };
+  const indicators = getIndicatorBucketsFromForm();
+  put('ov_subject_name', $('ci_name')?.value || $('gSubj')?.value || '-');
+  put('ov_subject_code', $('ci_code')?.value || '-');
+  put('ov_teacher_name', $('ci_teacher_name')?.value || '-');
+  put('ov_total_hours', $('ci_total_hours')?.textContent || '0');
+  put('ov_indicator_count', String(indicators.formative.length + indicators.summative.length));
+  put('ov_unit_count', String((App.units?.[1]?.length || 0) + (App.units?.[2]?.length || 0)));
 }
 
-function renderIndicatorCoverageSummary() {
-  const wrap = $('indicatorCoverageGlobal');
-  if (!wrap) return;
-
-  const overview = getIndicatorUsageOverview();
-  if (!overview.total) {
-    wrap.innerHTML = `
-      <div class="coverage-head">
-        <div class="coverage-title">สรุปการผูกตัวชี้วัดกับหน่วยการเรียนรู้</div>
-      </div>
-      <div class="coverage-empty">ยังไม่มีตัวชี้วัดในหน้ารายวิชา กรุณากำหนดตัวชี้วัดระหว่างทางหรือปลายทางก่อน</div>
-    `;
-    return;
-  }
-
-  const renderItem = (item, withLinks) => `
-    <div class="coverage-item">
-      <div class="coverage-item-top"><strong>${item.label}</strong>${item.text}</div>
-      ${withLinks ? `
-        <div class="coverage-links">
-          ${item.units.map(u => `<button type="button" class="coverage-link coverage-link-jump" onclick="jumpToUnitFromCoverage(${u.term}, ${u.unitIndex})" title="เปิด${u.shortLabel}">${u.shortLabel}</button>`).join('')}
-        </div>
-      ` : ''}
-    </div>
-  `;
-
-  wrap.innerHTML = `
-    <div class="coverage-head">
-      <div class="coverage-title">สรุปการผูกตัวชี้วัดกับหน่วยการเรียนรู้</div>
-      <div class="coverage-stats">
-        <span class="coverage-stat total">ทั้งหมด ${overview.total} ข้อ</span>
-        <span class="coverage-stat used">ผูกแล้ว ${overview.used.length} ข้อ</span>
-        <span class="coverage-stat unused">ยังไม่ผูก ${overview.unused.length} ข้อ</span>
-      </div>
-    </div>
-    <div class="coverage-grid">
-      <div class="coverage-col">
-        <div class="coverage-col-title warn">ตัวชี้วัดที่ยังไม่ถูกผูกกับหน่วยใดเลย</div>
-        ${overview.unused.length ? `
-          <div class="coverage-list">
-            ${overview.unused.map(item => renderItem(item, false)).join('')}
-          </div>
-        ` : `<div class="coverage-empty">ครบแล้ว ทุกตัวชี้วัดถูกผูกกับหน่วยการเรียนรู้แล้ว</div>`}
-      </div>
-      <div class="coverage-col">
-        <div class="coverage-col-title ok">ตัวชี้วัดที่ผูกแล้ว <span style="font-weight:600;color:#64748b;">(กดที่ป้ายเพื่อเปิดหน่วย)</span></div>
-        ${overview.used.length ? `
-          <div class="coverage-list">
-            ${overview.used.map(item => renderItem(item, true)).join('')}
-          </div>
-        ` : `<div class="coverage-empty">ยังไม่มีตัวชี้วัดที่ถูกผูกกับหน่วยการเรียนรู้</div>`}
-      </div>
-    </div>
-  `;
-}
-
-function toggleUnitIndicator(t, ui, key, checked) {
-  const unit = App.units?.[t]?.[ui];
-  if (!unit) return;
-  const current = new Set(Array.isArray(unit.indicators) ? unit.indicators : []);
-  if (checked) current.add(key); else current.delete(key);
-  unit.indicators = [...current];
-  renderSubList(t);
-}
-
-function setActiveUnitTab(t, idx) {
-  App.activeUnitTab[t] = idx;
-  renderSubList(t);
-}
-
-function addSub(t) {
-  App.units[t].push({
-    name: `หน่วยที่ ${App.units[t].length + 1}`,
-    max: 10,
-    items: [{ name: "งาน 1", max: 10 }]
-  });
-  App.activeUnitTab[t] = App.units[t].length - 1;
-  renderSubList(t);
-}
-
-function rmSub(t, ui) {
-  if (!confirm(`ลบ "${App.units[t][ui].name}" ?`)) return;
-  App.units[t].splice(ui, 1);
-  if (App.activeUnitTab[t] >= App.units[t].length) {
-    App.activeUnitTab[t] = Math.max(0, App.units[t].length - 1);
-  }
-  renderSubList(t);
-}
-
-function addSubItem(t, ui) {
-  App.units[t][ui].items.push({
-    name: `งาน ${App.units[t][ui].items.length + 1}`,
-    max: 10
-  });
-  renderSubList(t);
-}
-
-function rmSubItem(t, ui, ii) {
-  if (!confirm('ลบงานนี้?')) return;
-  App.units[t][ui].items.splice(ii, 1);
-  renderSubList(t);
-}
-
-function renderUnitTabs(t) {
-  const wrap = $(`unitTabs_${t}`);
-  if (!wrap) return;
-
-  const units = App.units[t] || [];
-  if (!units.length) {
-    wrap.innerHTML = '';
-    return;
-  }
-
-  wrap.innerHTML = units.map((u, i) => `
-    <button type="button" class="unit-tab ${App.activeUnitTab[t] === i ? 'active' : ''}" onclick="setActiveUnitTab(${t}, ${i})">
-      ${u.name || `หน่วย ${i + 1}`}
-    </button>
-  `).join('');
-}
-
-function renderUnitEditor(t) {
-  const wrap = $(`unitEditor_${t}`);
-  if (!wrap) return;
-
-  const units = App.units[t] || [];
-  if (!units.length) {
-    wrap.innerHTML = `<div class="unit-empty">ยังไม่มีหน่วยการเรียนรู้</div>`;
-    return;
-  }
-
-  if (App.activeUnitTab[t] >= units.length) App.activeUnitTab[t] = units.length - 1;
-  if (App.activeUnitTab[t] < 0) App.activeUnitTab[t] = 0;
-
-  const ui = App.activeUnitTab[t];
-  const unit = units[ui];
-  const catalog = getIndicatorCatalog();
-  const grouped = {
-    formative: catalog.filter(item => item.type === 'formative'),
-    summative: catalog.filter(item => item.type === 'summative')
-  };
-  const selectedBadges = getUnitIndicatorBadges(unit);
-
-  const renderIndicatorGroup = (title, type, items) => `
-    <div class="indicator-group">
-      <div class="indicator-group-title">${title} <small>${items.length} ข้อ</small></div>
-      ${items.length ? `
-        <div class="indicator-list">
-          ${items.map(item => `
-            <label class="indicator-item">
-              <input type="checkbox" ${Array.isArray(unit.indicators) && unit.indicators.includes(item.key) ? 'checked' : ''}
-                onchange="toggleUnitIndicator(${t}, ${ui}, '${item.key}', this.checked)">
-              <span class="indicator-item-text"><strong>${item.label}</strong> ${item.text}</span>
-            </label>
-          `).join('')}
-        </div>
-      ` : `<div class="indicator-empty">ยังไม่ได้กำหนดตัวชี้วัด${type === 'formative' ? 'ระหว่างทาง' : 'ปลายทาง'}ในหน้ารายวิชา</div>`}
-    </div>
-  `;
-
-  wrap.innerHTML = `
-    <div class="unit-editor-card">
-      <div class="unit-editor-head">
-        <span class="sub-n">${ui + 1}.</span>
-        <input class="sub-name" type="text" value="${unit.name || ''}" placeholder="ชื่อหน่วย" onchange="App.units[${t}][${ui}].name=this.value;renderSubList(${t});">
-
-        <span class="sub-max-lbl">คะแนนเต็ม</span>
-        <input class="sub-max" type="number" min="1" value="${Number(unit.max) || 0}" onchange="App.units[${t}][${ui}].max=Number(this.value)||0;updateAutoScoreDisplay();renderSubList(${t});">
-
-        <button class="btn-rm" onclick="rmSub(${t}, ${ui})">✕</button>
-      </div>
-
-      <div class="d-flex flex-column gap-2">
-        ${(unit.items || []).map((item, ii) => `
-          <div class="unit-item-row">
-            <input class="sub-name" type="text" value="${item.name || ''}" placeholder="ชื่องาน" onchange="App.units[${t}][${ui}].items[${ii}].name=this.value">
-            <span class="sub-max-lbl">เต็ม</span>
-            <input class="sub-max" type="number" min="1" value="${Number(item.max) || 0}" onchange="App.units[${t}][${ui}].items[${ii}].max=Number(this.value)||0;renderSubList(${t});">
-            <button class="btn-rm" onclick="rmSubItem(${t}, ${ui}, ${ii})">✕</button>
-          </div>
-        `).join('')}
-      </div>
-
-      <button type="button" class="btn-add-sub mt-2" onclick="addSubItem(${t}, ${ui})">＋ เพิ่มงาน</button>
-
-      <div class="unit-meta-grid">
-        <div class="unit-meta-card">
-          <div class="unit-meta-title">ตัวชี้วัดที่ใช้ในหน่วยนี้</div>
-          <div class="indicator-grid">
-            ${renderIndicatorGroup('ตัวชี้วัดระหว่างทาง', 'formative', grouped.formative)}
-            ${renderIndicatorGroup('ตัวชี้วัดปลายทาง', 'summative', grouped.summative)}
-          </div>
-          ${selectedBadges.length ? `
-            <div class="indicator-badge-list">
-              ${selectedBadges.map(item => `<span class="indicator-badge ${item.type}">${item.label}</span>`).join('')}
-            </div>
-          ` : `<div class="unit-meta-note">ยังไม่ได้เลือกตัวชี้วัดให้หน่วยนี้</div>`}
-        </div>
-      </div>
-
-      <div class="raw-preview mt-2">คะแนนดิบรวมของงาน: <strong>${ScoreLogic.getUnitRawMax(t, ui)}</strong> | คะแนนที่เก็บเข้าหน่วย: <strong class="res">${Number(unit.max) || 0}</strong></div>
-    </div>
-  `;
-}
+function addSub(t) { App.units[t].push({ name: `หน่วยที่ ${App.units[t].length + 1}`, max: 10, items: [{ name: "งาน 1", max: 10 }] }); refreshCourseOverview(); renderSubList(t); }
+function rmSub(t, ui) { if (confirm(`ลบ "${App.units[t][ui].name}" ?`)) { App.units[t].splice(ui, 1); refreshCourseOverview(); renderSubList(t); } }
+function addSubItem(t, ui) { App.units[t][ui].items.push({ name: `งาน ${App.units[t][ui].items.length + 1}`, max: 10 }); refreshCourseOverview(); renderSubList(t); }
+function rmSubItem(t, ui, ii) { if (confirm('ลบงานนี้?')) { App.units[t][ui].items.splice(ii, 1); refreshCourseOverview(); renderSubList(t); } }
 
 function renderSubList(t) {
-  if (!Array.isArray(App.units[t])) App.units[t] = [];
-  if (App.activeUnitTab[t] == null) App.activeUnitTab[t] = 0;
-  if (App.activeUnitTab[t] >= App.units[t].length) {
-    App.activeUnitTab[t] = Math.max(0, App.units[t].length - 1);
-  }
-
-  renderUnitTabs(t);
-  renderUnitEditor(t);
-  renderIndicatorCoverageSummary();
+  const wrap = $(`subList_${t}`); if (!wrap) return;
+  if (!App.units[t].length) { wrap.innerHTML = `<div class="text-muted text-center py-3 border rounded">ยังไม่มีหน่วยการเรียนรู้</div>`; updateAutoScoreDisplay(); refreshCourseOverview(); return; }
+  
+  wrap.innerHTML = App.units[t].map((unit, ui) => {
+    return `<div class="sub-row mb-2 p-3 border rounded bg-white" style="display:block;">
+      <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
+        <span class="sub-n">${ui + 1}.</span>
+        <input class="sub-name" type="text" value="${unit.name || ''}" placeholder="ชื่อหน่วย" onchange="App.units[${t}][${ui}].name=this.value">
+        <span class="sub-max-lbl">คะแนนเต็ม</span>
+        <input class="sub-max" type="number" min="1" value="${Number(unit.max)||0}" onchange="App.units[${t}][${ui}].max=Number(this.value)||0;updateAutoScoreDisplay();renderSubList(${t});">
+        <button class="btn-rm" onclick="rmSub(${t},${ui})">✕</button>
+      </div>
+      <div class="ms-4 d-flex flex-column gap-2">
+        ${(unit.items ||[]).map((item, ii) => `<div class="d-flex align-items-center gap-2 flex-wrap">
+          <input class="sub-name" type="text" value="${item.name || ''}" placeholder="ชื่องาน" onchange="App.units[${t}][${ui}].items[${ii}].name=this.value">
+          <span class="sub-max-lbl">เต็ม</span>
+          <input class="sub-max" type="number" min="1" value="${Number(item.max)||0}" onchange="App.units[${t}][${ui}].items[${ii}].max=Number(this.value)||0;renderSubList(${t});">
+          <button class="btn-rm" onclick="rmSubItem(${t},${ui},${ii})">✕</button>
+        </div>`).join('')}
+        <button type="button" class="btn-add-sub" onclick="addSubItem(${t},${ui})">＋ เพิ่มงาน</button>
+      </div>
+      <div class="raw-preview mt-2">คะแนนดิบรวมของงาน: <strong>${ScoreLogic.getUnitRawMax(t, ui)}</strong> | คะแนนที่เก็บเข้าหน่วย: <strong class="res">${Number(unit.max)||0}</strong></div>
+    </div>`;
+  }).join('');
   updateAutoScoreDisplay();
+  refreshCourseOverview();
 }
 
 function toggleCols(t) { App.expanded[t] = !App.expanded[t]; $('gtbl').classList.toggle(`t${t}-collapsed`, !App.expanded[t]); if ($(`tbtn${t}`)) $(`tbtn${t}`).innerHTML = `<span class="arr">${App.expanded[t] ? '▼' : '▶'}</span> ${App.expanded[t] ? 'ยุบ' : 'ขยาย'}`; }
@@ -418,10 +182,9 @@ App.courseInfo = res.config?.courseInfo || {};
     App.units[1] = res.config?.units?.t1 || res.config?.subItems?.t1 || [];
     if (!App.isSemMode) App.units[2] = res.config?.units?.t2 || res.config?.subItems?.t2 ||[];
 
-    App.activeUnitTab = { 1: 0, 2: 0 };
-
     normalizeUnits(1); normalizeUnits(2); renderSubList(1); if (!App.isSemMode) renderSubList(2);
-    refreshUnitPanelLabels(); updateAutoScoreDisplay();
+    refreshUnitPanelLabels(); updateAutoScoreDisplay(); refreshCourseOverview();
+    switchCourseSubTab('basic', $('courseTabBasicBtn'));
 
     // ── โหลด rtw_data + guidance_data (แยก term) แล้ว merge เข้า students ──
     let rtwMap = {}, guidanceMap1 = {}, guidanceMap2 = {}, scoutMap1 = {}, scoutMap2 = {};
@@ -670,6 +433,7 @@ function applySubConfig() {
 // 10. SAVING SETTINGS & DATA
 // =====================================================
 function getCourseInfoForm() {
+  const indicatorBuckets = getIndicatorBucketsFromForm();
   return {
     learningArea: $('ci_learning_area').value || '',
     name: $('ci_name').value || '',
@@ -679,10 +443,7 @@ function getCourseInfoForm() {
     teacherName: $('ci_teacher_name').value || '',
     groupHeadName: $('ci_group_head_name').value || '',
     description: $('ci_description').value || '',
-    indicators: {
-      formative: String($('ci_indicators_formative').value || '').split(/\r?\n/).map(v => v.trim()).filter(Boolean),
-      summative: String($('ci_indicators_summative').value || '').split(/\r?\n/).map(v => v.trim()).filter(Boolean)
-    },
+    indicators: indicatorBuckets,
     schedule: {
       mon: +$('sch_mon').value || 0,
       tue: +$('sch_tue').value || 0,
@@ -696,7 +457,16 @@ function getCourseInfoForm() {
 }
 
 function setCourseInfoForm(c = {}, subj = '') {
-  const indicatorBuckets = normalizeIndicatorBuckets(c.indicators);
+  const rawIndicators = c.indicators;
+  const indicatorBuckets = (rawIndicators && typeof rawIndicators === 'object' && !Array.isArray(rawIndicators))
+    ? {
+        formative: Array.isArray(rawIndicators.formative) ? rawIndicators.formative : [],
+        summative: Array.isArray(rawIndicators.summative) ? rawIndicators.summative : []
+      }
+    : {
+        formative: String(rawIndicators || '').split(/\r?\n/).map(v => v.trim()).filter(Boolean),
+        summative: []
+      };
 
   $('ci_learning_area').value = c.learningArea || '';
   $('ci_name').value = c.name || subj || '';
@@ -706,13 +476,14 @@ function setCourseInfoForm(c = {}, subj = '') {
   $('ci_teacher_name').value = c.teacherName || '';
   $('ci_group_head_name').value = c.groupHeadName || '';
   $('ci_description').value = c.description || '';
-  $('ci_indicators_formative').value = indicatorBuckets.formative.join('\n');
-  $('ci_indicators_summative').value = indicatorBuckets.summative.join('\n');
-  renderIndicatorCoverageSummary();
+  if ($('ci_indicators_formative')) $('ci_indicators_formative').value = indicatorBuckets.formative.join('\n');
+  if ($('ci_indicators_summative')) $('ci_indicators_summative').value = indicatorBuckets.summative.join('\n');
   ['mon','tue','wed','thu','fri'].forEach(d => $(`sch_${d}`).value = c.schedule?.[d] || 0);
   $('ci_manual_adjust').value = c.schedule?.manualAdjust || 0;
   $('ci_total_hours').textContent = c.schedule?.totalHours || 0;
+  refreshCourseOverview();
 }
+
 function getSchoolProfileForm() {
   return { school_name: $('sp_school_name').value || '', director_name: $('sp_director_name').value || '', director_position: $('sp_director_position').value || 'ผู้อำนวยการโรงเรียน', academic_head_name: $('sp_academic_head_name').value || '', academic_head_position: $('sp_academic_head_position').value || 'หัวหน้าวิชาการ' };
 }
@@ -797,9 +568,9 @@ async function saveSchoolProfile() {
   Utils.hideLoading();
 }
 
-async function saveCourseMetaOnly() { if (!$('ci_name').value.trim()) $('ci_name').value = $('gSubj').value || ''; const ok = await saveConfigOnly(); renderIndicatorCoverageSummary(); if (ok) Utils.toast('✅ บันทึกข้อมูลวิชาเรียบร้อย'); }
-async function saveScheduleOnly() { if (await saveConfigOnly()) Utils.toast('✅ บันทึกเวลาเรียนเรียบร้อย'); }
-async function saveScoreConfigOnly() { if (await saveConfigOnly()) Utils.toast('✅ บันทึกการตั้งค่าคะแนนเรียบร้อย'); }
+async function saveCourseMetaOnly() { if (!$('ci_name').value.trim()) $('ci_name').value = $('gSubj').value || ''; refreshCourseOverview(); if (await saveConfigOnly()) Utils.toast('✅ บันทึกข้อมูลวิชาเรียบร้อย'); }
+async function saveScheduleOnly() { refreshCourseOverview(); if (await saveConfigOnly()) Utils.toast('✅ บันทึกเวลาเรียนเรียบร้อย'); }
+async function saveScoreConfigOnly() { refreshCourseOverview(); if (await saveConfigOnly()) Utils.toast('✅ บันทึกการตั้งค่าคะแนนเรียบร้อย'); }
 
 // =====================================================
 
@@ -830,3 +601,6 @@ function syncStudentsToSubjectSheet_(sheet, students) {
 
   return newRows.length;
 }
+
+
+window.addEventListener('DOMContentLoaded', () => { try { refreshCourseOverview(); } catch(e) {} });
