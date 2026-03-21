@@ -80,8 +80,6 @@ function refreshClubDates() {
 function renderClubPanel() {
   const wrap = $('clubContainer'); if (!wrap) return;
   _renderClubMain();
-  // โหลดข้อมูลชุมนุมที่บันทึกไว้อัตโนมัติ
-  loadSavedClub();
 }
 
 function switchClubTab(term, btn) {
@@ -151,6 +149,8 @@ async function loadSavedClub() {
   const t = Club.term;
   const classes = [...new Set(CONFIG.ALL_CLS.map(c => c.replace(/ เทอม [12]/g, '').trim()))];
 
+  // ป้องกันกดซ้อน
+  if (document.getElementById('btnLoadSaved')) document.getElementById('btnLoadSaved').disabled = true;
   Utils.showLoading('โหลดข้อมูลชุมนุม...');
   try {
     const savedResults = await Promise.all(
@@ -177,6 +177,7 @@ async function loadSavedClub() {
 
     if (savedMembers.length === 0) {
       Utils.toast('ยังไม่มีข้อมูลชุมนุมที่บันทึกไว้');
+      _renderClubMain();
       Utils.hideLoading();
       return;
     }
@@ -184,6 +185,22 @@ async function loadSavedClub() {
     Club.members    = savedMembers;
     Club.resultMap  = savedResultMap;
     if (savedClubName) Club.clubName = savedClubName;
+
+    // โหลด termDates + holidays ถ้ายังไม่มี (จำเป็นสำหรับคำนวณวันชุมนุม)
+    if (!App.termDates || !App.termDates['t' + t + '_start']) {
+      try {
+        // ดึงจากชั้นแรกที่มีสมาชิก
+        const firstMember = savedMembers[0];
+        const clsKey  = firstMember.classroom;
+        const subsKey = Object.keys(App.subs || {}).find(k => k === clsKey || k.startsWith(clsKey + ' '));
+        const subs    = subsKey ? (App.subs[subsKey] || []) : [];
+        if (subs.length) {
+          const gradeRes = await api('getGrades', { year, classroom: subsKey || clsKey, subject: subs[0] });
+          if (gradeRes.termDates) App.termDates = gradeRes.termDates;
+          if (gradeRes.holidays)  App.holidays  = gradeRes.holidays;
+        }
+      } catch(e) { /* ถ้าโหลดไม่ได้ — ใช้ dates เปล่า */ }
+    }
 
     // โหลด topics + attArray
     try {
@@ -207,10 +224,21 @@ async function loadSavedClub() {
     } catch(e) { /* ยังไม่มีกิจกรรม — ไม่ error */ }
 
     Club.dates = calcClubDates();
-    Utils.toast(`✅ โหลดชุมนุม "${Club.clubName}" ${savedMembers.length} คน`);
+    // ถ้า topics น้อยกว่าวัน → pad ให้ครบ
+    if (Club.topics.length < Club.dates.length) {
+      while (Club.topics.length < Club.dates.length) Club.topics.push('');
+    }
+    // sync attMap ให้ครบทุกวัน
+    Club.members.forEach(m => {
+      if (!Club.attMap[m.studentId]) Club.attMap[m.studentId] = [];
+      while (Club.attMap[m.studentId].length < Club.dates.length) Club.attMap[m.studentId].push('ป');
+      Club.attMap[m.studentId] = Club.attMap[m.studentId].slice(0, Club.dates.length);
+    });
+    Utils.toast(`✅ โหลดชุมนุม "${Club.clubName}" ${savedMembers.length} คน — ${Club.dates.length} ครั้ง`);
     _renderClubMain();
   } catch(e) { Utils.toast(e.message, 'error'); }
   Utils.hideLoading();
+  if (document.getElementById('btnLoadSaved')) document.getElementById('btnLoadSaved').disabled = false;
 }
 
 function switchClubClassTab(cls) {
@@ -261,7 +289,7 @@ function _renderClubMain() {
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
         <div style="font-size:12px;font-weight:700;color:#92400e;">เพิ่ม/ลบสมาชิกชุมนุม</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button class="btn-pri" style="padding:6px 14px;font-size:.82rem;background:#6b7280;"
+          <button id="btnLoadSaved" class="btn-pri" style="padding:6px 14px;font-size:.82rem;background:#6b7280;"
             onclick="loadSavedClub()">
             📂 โหลดชุมนุมที่บันทึกไว้
           </button>
