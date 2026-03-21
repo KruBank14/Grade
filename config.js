@@ -1,4 +1,4 @@
-  // =====================================================
+// =====================================================
 // config.js — CONFIG + STATE + API (JSONP for GAS)
 // ใช้คู่กับ Code.gs เวอร์ชัน doGet(action, callback, data)
 // =====================================================
@@ -108,8 +108,6 @@ function api(action, data = {}) {
     'saveRTW',
     'saveGuidance',
     'saveScout',
-      'saveClub',        
-
     'saveTeacherAssignments',
     'saveSchoolProfile',
     'setupGradeYear'
