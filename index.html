@@ -580,71 +580,6 @@ body{
 .btn-add-sub:hover{
   background:#ede9fe;
 }
-.unit-tab-wrap{
-  overflow-x:auto;
-  margin-bottom:10px;
-  padding-bottom:2px;
-}
-.unit-tabs{
-  display:flex;
-  gap:8px;
-  flex-wrap:nowrap;
-  min-width:max-content;
-}
-.unit-tab{
-  border:none;
-  border-radius:10px;
-  padding:8px 14px;
-  font-family:inherit;
-  font-weight:700;
-  font-size:.84rem;
-  cursor:pointer;
-  background:#eef2ff;
-  color:#4338ca;
-  border:1.5px solid #c7d2fe;
-  transition:all .15s;
-  white-space:nowrap;
-}
-.unit-tab:hover{
-  background:#e0e7ff;
-}
-.unit-tab.active{
-  background:linear-gradient(135deg,#7c3aed,#5b21b6);
-  color:#fff;
-  border-color:transparent;
-  box-shadow:0 4px 12px rgba(124,58,237,.22);
-}
-.unit-editor-card{
-  background:#fff;
-  border:1px solid #ddd6fe;
-  border-radius:14px;
-  padding:14px;
-  margin-bottom:10px;
-}
-.unit-editor-head{
-  display:flex;
-  align-items:center;
-  gap:8px;
-  flex-wrap:wrap;
-  margin-bottom:10px;
-}
-.unit-item-row{
-  display:flex;
-  align-items:center;
-  gap:8px;
-  flex-wrap:wrap;
-  margin-bottom:8px;
-}
-.unit-empty{
-  border:1.5px dashed #c4b5fd;
-  border-radius:12px;
-  padding:20px;
-  text-align:center;
-  color:#7c3aed;
-  background:#faf5ff;
-  font-weight:700;
-  margin-bottom:10px;
-}
 .raw-preview{
   display:flex;
   align-items:center;
@@ -1281,47 +1216,6 @@ body{
   }
 }
 
-
-.indicator-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;}
-.indicator-group{background:#fafafa;border:1px solid #e5e7eb;border-radius:12px;padding:10px 12px;}
-.indicator-group-title{font-weight:800;font-size:.84rem;margin-bottom:8px;display:flex;align-items:center;gap:6px;}
-.indicator-group-title small{font-weight:600;color:var(--muted);}
-.indicator-list{display:flex;flex-direction:column;gap:7px;max-height:240px;overflow:auto;padding-right:2px;}
-.indicator-item{display:flex;align-items:flex-start;gap:8px;background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:7px 9px;}
-.indicator-item input{margin-top:3px;transform:scale(1.05);}
-.indicator-item-text{font-size:.82rem;line-height:1.45;color:#334155;}
-.indicator-empty{border:1px dashed #cbd5e1;background:#f8fafc;color:#64748b;border-radius:10px;padding:12px;text-align:center;font-size:.82rem;}
-.unit-meta-grid{display:grid;grid-template-columns:1fr;gap:10px;margin-top:10px;}
-.unit-meta-card{background:#faf5ff;border:1px solid #ddd6fe;border-radius:12px;padding:10px 12px;}
-.unit-meta-title{font-weight:800;font-size:.84rem;color:#6d28d9;margin-bottom:8px;}
-.unit-meta-note{font-size:.78rem;color:#64748b;margin-top:6px;}
-.indicator-badge-list{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
-.indicator-badge{display:inline-flex;align-items:center;gap:4px;padding:4px 9px;border-radius:999px;font-size:.74rem;font-weight:700;}
-.indicator-badge.formative{background:#dbeafe;color:#1d4ed8;}
-.indicator-badge.summative{background:#fef3c7;color:#b45309;}
-.coverage-card{background:#f8fafc;border:1px solid #dbeafe;border-radius:14px;padding:12px 14px;margin-bottom:14px;}
-.coverage-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;}
-.coverage-title{font-weight:800;font-size:.88rem;color:#1e3a8a;}
-.coverage-stats{display:flex;gap:8px;flex-wrap:wrap;}
-.coverage-stat{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;font-size:.76rem;font-weight:800;}
-.coverage-stat.total{background:#e0f2fe;color:#075985;}
-.coverage-stat.used{background:#dcfce7;color:#166534;}
-.coverage-stat.unused{background:#fee2e2;color:#991b1b;}
-.coverage-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;}
-.coverage-col{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:10px 12px;}
-.coverage-col-title{font-weight:800;font-size:.82rem;margin-bottom:8px;}
-.coverage-col-title.ok{color:#166534;}
-.coverage-col-title.warn{color:#b91c1c;}
-.coverage-list{display:flex;flex-direction:column;gap:8px;max-height:240px;overflow:auto;padding-right:2px;}
-.coverage-item{border:1px solid #e5e7eb;border-radius:10px;padding:8px 9px;background:#fff;}
-.coverage-item-top{font-size:.8rem;line-height:1.45;color:#334155;}
-.coverage-item-top strong{margin-right:4px;}
-.coverage-links{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px;}
-.coverage-link{display:inline-flex;align-items:center;padding:3px 8px;border-radius:999px;background:#eef2ff;color:#4338ca;font-size:.72rem;font-weight:700;}
-.coverage-link-jump{border:1px solid #c7d2fe;cursor:pointer;font-family:inherit;transition:all .15s ease;}
-.coverage-link-jump:hover{background:#ddd6fe;color:#5b21b6;transform:translateY(-1px);}
-.coverage-link-jump:focus-visible{outline:2px solid #8b5cf6;outline-offset:2px;}
-.coverage-empty{border:1px dashed #cbd5e1;border-radius:10px;padding:12px;text-align:center;color:#64748b;background:#f8fafc;font-size:.8rem;}
 @media (max-width:600px){
   .sub-row{flex-wrap:wrap;gap:6px;}
   .sub-name{width:100%;flex:none;}
@@ -1357,6 +1251,35 @@ body{
     padding:5px 9px;
   }
 }
+
+.subject-overview-card{padding:16px;border:1px solid #dbeafe;background:linear-gradient(180deg,#ffffff,#f8fbff);}
+.subject-overview-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;}
+.overview-item{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:12px;min-height:78px;}
+.overview-label{font-size:.76rem;color:var(--muted);margin-bottom:4px;font-weight:700;}
+.overview-value{font-size:1rem;font-weight:800;color:var(--text);line-height:1.3;word-break:break-word;}
+.course-subtabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;}
+.course-subtab{border:none;padding:10px 14px;border-radius:999px;background:#e2e8f0;color:#334155;font-family:inherit;font-size:.84rem;font-weight:800;cursor:pointer;transition:all .15s;}
+.course-subtab:hover{background:#dbeafe;color:#1d4ed8;}
+.course-subtab.on{background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;box-shadow:0 6px 18px rgba(37,99,235,.18);}
+.course-subpanel{display:block;}
+.subject-section-title{font-weight:800;font-size:.95rem;color:#166534;margin-bottom:12px;}
+.subject-actions{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;margin-top:6px;}
+.btn-next{border:none;border-radius:12px;padding:11px 16px;background:#e0e7ff;color:#3730a3;font-family:inherit;font-weight:800;cursor:pointer;}
+.btn-next:hover{background:#c7d2fe;}
+.schedule-layout{display:grid;grid-template-columns:2fr 1fr;gap:14px;align-items:start;}
+.schedule-day-grid{display:grid;grid-template-columns:repeat(5,minmax(56px,1fr));gap:10px;}
+.schedule-day-box{background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:10px;text-align:center;}
+.schedule-help{font-size:.78rem;color:var(--muted);margin-top:6px;line-height:1.5;}
+.hours-summary-box{background:#dcfce7;color:#14532d;font-size:.9rem;font-weight:700;padding:12px;border-radius:12px;margin-bottom:12px;}
+.units-layout{display:grid;grid-template-columns:320px 1fr;gap:14px;align-items:start;}
+.units-side .card,.units-main .card{margin-bottom:12px;}
+.mini-title{font-weight:800;font-size:.86rem;color:#334155;margin-bottom:8px;}
+.score-mini-list{display:grid;gap:8px;}
+.score-mini-item{display:flex;justify-content:space-between;gap:12px;padding:10px 12px;background:#fff;border:1px solid #e2e8f0;border-radius:12px;font-size:.85rem;font-weight:700;}
+.score-mini-item .val{font-weight:800;}
+.unit-side-note{font-size:.78rem;color:var(--muted);line-height:1.5;}
+@media (max-width: 992px){.schedule-layout,.units-layout{grid-template-columns:1fr;}}
+
 </style>
 </head>
 <body>
@@ -1614,192 +1537,217 @@ body{
 
 <!-- ===== TAB: ข้อมูลรายวิชา ===== -->
 <div class="settings-panel" id="panel_courseInfo">
-  <div class="card mb-3" style="background:#ffffff;border:1px solid #dcfce7;">
-    <div style="font-weight:800;font-size:.9rem;color:#166534;margin-bottom:12px;">1) ข้อมูลรายวิชา</div>
-
-    <div class="cfg-row mb-3">
-      <div class="cfg-block" style="flex:1;min-width:180px;">
-        <label class="cfg-ttl">กลุ่มสาระการเรียนรู้</label>
-        <input type="text" id="ci_learning_area" class="cfg-n" style="width:100%;text-align:left;" placeholder="เช่น ภาษาไทย / คณิตศาสตร์ / วิทยาศาสตร์">
+  <div class="card subject-overview-card mb-3">
+    <div class="subject-overview-grid">
+      <div class="overview-item">
+        <div class="overview-label">รายวิชา</div>
+        <div class="overview-value" id="ov_subject_name">-</div>
       </div>
-      <div class="cfg-block" style="flex:1.2;min-width:220px;">
-        <label class="cfg-ttl">ชื่อวิชา</label>
-        <input type="text" id="ci_name" class="cfg-n" style="width:100%;text-align:left;" placeholder="เช่น ภาษาไทยพื้นฐาน">
+      <div class="overview-item">
+        <div class="overview-label">รหัสวิชา</div>
+        <div class="overview-value" id="ov_subject_code">-</div>
       </div>
-    </div>
-
-    <div class="cfg-row mb-3">
-      <div class="cfg-block" style="flex:1;min-width:140px;">
-        <label class="cfg-ttl">รหัสวิชา</label>
-        <input type="text" id="ci_code" class="cfg-n" style="width:100%;text-align:left;" placeholder="เช่น ท21101">
+      <div class="overview-item">
+        <div class="overview-label">ครูผู้สอน</div>
+        <div class="overview-value" id="ov_teacher_name">-</div>
       </div>
-      <div class="cfg-block" style="flex:1;min-width:160px;">
-        <label class="cfg-ttl">ประเภทวิชา</label>
-        <select id="ci_type" class="cfg-n" style="width:100%;text-align:left;">
-          <option value="รายวิชาพื้นฐาน">รายวิชาพื้นฐาน</option>
-          <option value="รายวิชาเพิ่มเติม">รายวิชาเพิ่มเติม</option>
-          <option value="กิจกรรมพัฒนาผู้เรียน">กิจกรรมพัฒนาผู้เรียน</option>
-        </select>
+      <div class="overview-item">
+        <div class="overview-label">เวลาเรียนรวม</div>
+        <div class="overview-value" id="ov_total_hours">0</div>
       </div>
-      <div class="cfg-block" style="flex:0.7;min-width:100px;">
-        <label class="cfg-ttl">หน่วยกิต</label>
-        <input type="number" step="0.5" id="ci_credit" class="cfg-n" style="width:100%;" placeholder="1.0">
+      <div class="overview-item">
+        <div class="overview-label">ตัวชี้วัดทั้งหมด</div>
+        <div class="overview-value" id="ov_indicator_count">0</div>
       </div>
-    </div>
-
-    <div class="cfg-row mb-3">
-      <div class="cfg-block" style="flex:1;min-width:220px;">
-        <label class="cfg-ttl">ชื่อครูผู้สอน</label>
-        <input type="text" id="ci_teacher_name" class="cfg-n" style="width:100%;text-align:left;" placeholder="เช่น นางสาว...">
+      <div class="overview-item">
+        <div class="overview-label">หน่วยการเรียนรู้</div>
+        <div class="overview-value" id="ov_unit_count">0</div>
       </div>
-      <div class="cfg-block" style="flex:1;min-width:220px;">
-        <label class="cfg-ttl">หัวหน้ากลุ่มสาระการเรียนรู้</label>
-        <input type="text" id="ci_group_head_name" class="cfg-n" style="width:100%;text-align:left;" placeholder="เช่น นาย...">
-      </div>
-    </div>
-    <div class="cfg-row mb-3">
-      <div class="cfg-block" style="flex:1;min-width:280px;">
-        <label class="cfg-ttl">คำอธิบายรายวิชา</label>
-        <textarea id="ci_description" class="cfg-n" 
-          style="width:100%;text-align:left;min-height:180px;resize:vertical;line-height:1.6;padding:10px;" 
-          placeholder="ใส่คำอธิบายรายวิชา..."></textarea>
-      </div>
-    </div>
-
-    <div class="cfg-row mb-3">
-      <div class="cfg-block" style="flex:1;min-width:280px;">
-        <label class="cfg-ttl">ตัวชี้วัดระหว่างทาง</label>
-        <textarea id="ci_indicators_formative" class="cfg-n" 
-          style="width:100%;text-align:left;min-height:180px;resize:vertical;line-height:1.6;padding:10px;" 
-          placeholder="ใส่ตัวชี้วัดระหว่างทาง 1 บรรทัดต่อ 1 ข้อ&#10;เช่น ศ 1.1 ป.1/1 ..."></textarea>
-        <small style="color:var(--muted);display:block;margin-top:6px;">แนะนำให้ใส่ 1 บรรทัด ต่อ 1 ตัวชี้วัด</small>
-      </div>
-      <div class="cfg-block" style="flex:1;min-width:280px;">
-        <label class="cfg-ttl">ตัวชี้วัดปลายทาง</label>
-        <textarea id="ci_indicators_summative" class="cfg-n" 
-          style="width:100%;text-align:left;min-height:180px;resize:vertical;line-height:1.6;padding:10px;" 
-          placeholder="ใส่ตัวชี้วัดปลายทาง 1 บรรทัดต่อ 1 ข้อ&#10;เช่น ศ 1.1 ป.1/4 ..."></textarea>
-        <small style="color:var(--muted);display:block;margin-top:6px;">ใช้สำหรับสรุปผลช่วงปลายหน่วย / ปลายภาค</small>
-      </div>
-    </div>
-
-    <div style="display:flex;justify-content:flex-end;">
-      <button class="btn-save" onclick="saveCourseMetaOnly()" style="background:linear-gradient(135deg,#16a34a,#15803d);min-width:210px;">
-        💾 บันทึกข้อมูลวิชา
-      </button>
     </div>
   </div>
 
-  <div class="card mb-3" style="background:#ffffff;border:1px solid #dcfce7;">
-    <div style="font-weight:800;font-size:.9rem;color:#166534;margin-bottom:12px;">2) เวลาเรียน (ปพ.5)</div>
+  <div class="course-subtabs">
+    <button class="course-subtab on" id="courseTabBasicBtn" onclick="switchCourseSubTab('basic', this)">ข้อมูลพื้นฐาน</button>
+    <button class="course-subtab" id="courseTabDescBtn" onclick="switchCourseSubTab('desc', this)">คำอธิบาย/ตัวชี้วัด</button>
+    <button class="course-subtab" id="courseTabScheduleBtn" onclick="switchCourseSubTab('schedule', this)">เวลาเรียน</button>
+    <button class="course-subtab" id="courseTabUnitsBtn" onclick="switchCourseSubTab('units', this)">หน่วยการเรียนรู้</button>
+  </div>
 
-    <label class="cfg-ttl d-block mb-2">ตารางเรียน (ระบุจำนวนคาบที่สอนในแต่ละวัน)</label>
-    <div class="d-flex flex-wrap gap-2 mb-3">
-      <div class="text-center"><small class="d-block text-muted">จ.</small><input type="number" id="sch_mon" class="cfg-n" style="width:50px;" value="0" min="0" oninput="calcTotalHours()"></div>
-      <div class="text-center"><small class="d-block text-muted">อ.</small><input type="number" id="sch_tue" class="cfg-n" style="width:50px;" value="0" min="0" oninput="calcTotalHours()"></div>
-      <div class="text-center"><small class="d-block text-muted">พ.</small><input type="number" id="sch_wed" class="cfg-n" style="width:50px;" value="0" min="0" oninput="calcTotalHours()"></div>
-      <div class="text-center"><small class="d-block text-muted">พฤ.</small><input type="number" id="sch_thu" class="cfg-n" style="width:50px;" value="0" min="0" oninput="calcTotalHours()"></div>
-      <div class="text-center"><small class="d-block text-muted">ศ.</small><input type="number" id="sch_fri" class="cfg-n" style="width:50px;" value="0" min="0" oninput="calcTotalHours()"></div>
-    </div>
+  <div id="coursePanel_basic" class="course-subpanel">
+    <div class="card mb-3" style="background:#ffffff;border:1px solid #dcfce7;">
+      <div class="subject-section-title">1) ข้อมูลพื้นฐานรายวิชา</div>
 
-    <div class="d-flex align-items-center gap-2 mb-3 px-2">
-      <label class="cfg-ttl mb-0">ปรับแก้เวลาเรียนด้วยตนเอง:</label>
-      <input type="number" id="ci_manual_adjust" class="cfg-n" style="width:60px;" value="0" oninput="calcTotalHours()">
-      <span style="font-size:0.8rem;color:var(--muted);">คาบ (+ หรือ - ได้)</span>
-    </div>
+      <div class="cfg-row mb-3">
+        <div class="cfg-block" style="flex:1;min-width:180px;">
+          <label class="cfg-ttl">กลุ่มสาระการเรียนรู้</label>
+          <input type="text" id="ci_learning_area" class="cfg-n" style="width:100%;text-align:left;" placeholder="เช่น ภาษาไทย / คณิตศาสตร์ / วิทยาศาสตร์">
+        </div>
+        <div class="cfg-block" style="flex:1.2;min-width:220px;">
+          <label class="cfg-ttl">ชื่อวิชา</label>
+          <input type="text" id="ci_name" class="cfg-n" style="width:100%;text-align:left;" placeholder="เช่น ภาษาไทยพื้นฐาน">
+        </div>
+      </div>
 
-    <div class="p-2 rounded mb-3" style="background:#dcfce7;color:#14532d;font-size:0.85rem;font-weight:bold;">
-      ⏱️ เวลาเรียนรวมทั้งภาคเรียน:
-      <span id="ci_total_hours" style="font-size:1.1rem;color:#166534;">0</span> คาบ/ชั่วโมง
-      <small class="d-block fw-normal text-muted mt-1">* คำนวณอัตโนมัติจากวันเปิด-ปิดเทอม และตัดวันหยุดเสาร์-อาทิตย์/วันหยุดที่ตั้งไว้</small>
-    </div>
+      <div class="cfg-row mb-3">
+        <div class="cfg-block" style="flex:1;min-width:140px;">
+          <label class="cfg-ttl">รหัสวิชา</label>
+          <input type="text" id="ci_code" class="cfg-n" style="width:100%;text-align:left;" placeholder="เช่น ท21101">
+        </div>
+        <div class="cfg-block" style="flex:1;min-width:160px;">
+          <label class="cfg-ttl">ประเภทวิชา</label>
+          <select id="ci_type" class="cfg-n" style="width:100%;text-align:left;">
+            <option value="รายวิชาพื้นฐาน">รายวิชาพื้นฐาน</option>
+            <option value="รายวิชาเพิ่มเติม">รายวิชาเพิ่มเติม</option>
+            <option value="กิจกรรมพัฒนาผู้เรียน">กิจกรรมพัฒนาผู้เรียน</option>
+          </select>
+        </div>
+        <div class="cfg-block" style="flex:0.7;min-width:100px;">
+          <label class="cfg-ttl">หน่วยกิต</label>
+          <input type="number" step="0.5" id="ci_credit" class="cfg-n" style="width:100%;" placeholder="1.0">
+        </div>
+      </div>
 
-    <div style="display:flex;justify-content:flex-end;">
-      <button class="btn-save" onclick="saveScheduleOnly()" style="background:linear-gradient(135deg,#16a34a,#15803d);min-width:210px;">
-        💾 บันทึกเวลาเรียน
-      </button>
+      <div class="cfg-row mb-3">
+        <div class="cfg-block" style="flex:1;min-width:220px;">
+          <label class="cfg-ttl">ชื่อครูผู้สอน</label>
+          <input type="text" id="ci_teacher_name" class="cfg-n" style="width:100%;text-align:left;" placeholder="เช่น นางสาว...">
+        </div>
+        <div class="cfg-block" style="flex:1;min-width:220px;">
+          <label class="cfg-ttl">หัวหน้ากลุ่มสาระการเรียนรู้</label>
+          <input type="text" id="ci_group_head_name" class="cfg-n" style="width:100%;text-align:left;" placeholder="เช่น นาย...">
+        </div>
+      </div>
+
+      <div class="subject-actions">
+        <button class="btn-save" onclick="saveCourseMetaOnly()" style="background:linear-gradient(135deg,#16a34a,#15803d);min-width:210px;">💾 บันทึกข้อมูลพื้นฐาน</button>
+        <button class="btn-next" onclick="goCourseSubTab('desc')">ถัดไป: คำอธิบาย/ตัวชี้วัด</button>
+      </div>
     </div>
   </div>
 
-  <div class="card mb-0" style="background:#ffffff;border:1px solid #dcfce7;">
-    <div style="font-weight:800;font-size:.9rem;color:#166534;margin-bottom:12px;">
-      3) ตั้งค่าคะแนนแบบหน่วยการเรียนรู้
-    </div>
+  <div id="coursePanel_desc" class="course-subpanel" style="display:none;">
+    <div class="card mb-3" style="background:#ffffff;border:1px solid #dcfce7;">
+      <div class="subject-section-title">2) คำอธิบายและตัวชี้วัด</div>
 
-    <div class="card mb-3" style="background:#f8fafc;">
-      <div class="cfg-row">
-        <div class="cfg-block">
-          <div class="cfg-ttl" style="color:#1d4ed8;">เทอม 1 (คำนวณอัตโนมัติ)</div>
-          <div class="cfg-inline">
-            <div class="cfg-n" id="show_t1_keep" style="background:#dbeafe;color:#1e3a8a;display:flex;align-items:center;justify-content:center;">0</div>
-            <div class="cfg-n" id="show_t1_exam" style="background:#fef3c7;color:#92400e;display:flex;align-items:center;justify-content:center;">0</div>
+      <div class="cfg-row mb-3">
+        <div class="cfg-block" style="flex:1;min-width:280px;">
+          <label class="cfg-ttl">คำอธิบายรายวิชา</label>
+          <textarea id="ci_description" class="cfg-n" style="width:100%;text-align:left;min-height:220px;resize:vertical;line-height:1.6;padding:10px;" placeholder="ใส่คำอธิบายรายวิชา..."></textarea>
+        </div>
+      </div>
+
+      <div class="cfg-row mb-3">
+        <div class="cfg-block" style="flex:1;min-width:280px;">
+          <label class="cfg-ttl">ตัวชี้วัดระหว่างทาง</label>
+          <textarea id="ci_indicators_formative" class="cfg-n" style="width:100%;text-align:left;min-height:220px;resize:vertical;line-height:1.6;padding:10px;" placeholder="ใส่ตัวชี้วัดระหว่างทาง 1 บรรทัดต่อ 1 ข้อ&#10;เช่น ศ 1.1 ป.1/1 ..."></textarea>
+          <small style="color:var(--muted);display:block;margin-top:6px;">แนะนำให้ใส่ 1 บรรทัด ต่อ 1 ตัวชี้วัด</small>
+        </div>
+        <div class="cfg-block" style="flex:1;min-width:280px;">
+          <label class="cfg-ttl">ตัวชี้วัดปลายทาง</label>
+          <textarea id="ci_indicators_summative" class="cfg-n" style="width:100%;text-align:left;min-height:220px;resize:vertical;line-height:1.6;padding:10px;" placeholder="ใส่ตัวชี้วัดปลายทาง 1 บรรทัดต่อ 1 ข้อ&#10;เช่น ศ 1.1 ป.1/4 ..."></textarea>
+          <small style="color:var(--muted);display:block;margin-top:6px;">ใช้สำหรับสรุปผลช่วงปลายหน่วย / ปลายภาค</small>
+        </div>
+      </div>
+
+      <div class="subject-actions">
+        <button class="btn-save" onclick="saveCourseMetaOnly()" style="background:linear-gradient(135deg,#16a34a,#15803d);min-width:210px;">💾 บันทึกคำอธิบาย/ตัวชี้วัด</button>
+        <button class="btn-next" onclick="goCourseSubTab('schedule')">ถัดไป: เวลาเรียน</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="coursePanel_schedule" class="course-subpanel" style="display:none;">
+    <div class="card mb-3" style="background:#ffffff;border:1px solid #dcfce7;">
+      <div class="subject-section-title">3) เวลาเรียน (ปพ.5)</div>
+
+      <div class="schedule-layout">
+        <div>
+          <label class="cfg-ttl d-block mb-2">ตารางเรียนรายสัปดาห์</label>
+          <div class="schedule-day-grid mb-3">
+            <div class="schedule-day-box"><small class="d-block text-muted mb-1">จ.</small><input type="number" id="sch_mon" class="cfg-n" style="width:100%;" value="0" min="0" oninput="calcTotalHours();refreshCourseOverview()"></div>
+            <div class="schedule-day-box"><small class="d-block text-muted mb-1">อ.</small><input type="number" id="sch_tue" class="cfg-n" style="width:100%;" value="0" min="0" oninput="calcTotalHours();refreshCourseOverview()"></div>
+            <div class="schedule-day-box"><small class="d-block text-muted mb-1">พ.</small><input type="number" id="sch_wed" class="cfg-n" style="width:100%;" value="0" min="0" oninput="calcTotalHours();refreshCourseOverview()"></div>
+            <div class="schedule-day-box"><small class="d-block text-muted mb-1">พฤ.</small><input type="number" id="sch_thu" class="cfg-n" style="width:100%;" value="0" min="0" oninput="calcTotalHours();refreshCourseOverview()"></div>
+            <div class="schedule-day-box"><small class="d-block text-muted mb-1">ศ.</small><input type="number" id="sch_fri" class="cfg-n" style="width:100%;" value="0" min="0" oninput="calcTotalHours();refreshCourseOverview()"></div>
           </div>
-          <div style="font-size:.78rem;color:var(--muted);margin-top:4px;">
-            เก็บ = รวมคะแนนทุกหน่วย / สอบ = ส่วนที่เหลือจากคะแนนเต็ม
+        </div>
+        <div>
+          <label class="cfg-ttl d-block mb-2">ค่าปรับเวลาเรียน</label>
+          <input type="number" id="ci_manual_adjust" class="cfg-n" style="width:100%;" value="0" oninput="calcTotalHours();refreshCourseOverview()">
+          <div class="schedule-help">ใช้กรณีต้องเพิ่ม/ลดคาบจากการคำนวณอัตโนมัติ เช่น มีการสลับคาบ สอนชดเชย หรือมีชั่วโมงพิเศษ</div>
+        </div>
+      </div>
+
+      <div class="hours-summary-box">
+        ⏱️ เวลาเรียนรวมทั้งภาคเรียน: <span id="ci_total_hours" style="font-size:1.1rem;color:#166534;">0</span> คาบ/ชั่วโมง
+        <small class="d-block fw-normal text-muted mt-1">* คำนวณอัตโนมัติจากวันเปิด-ปิดเทอม และตัดวันหยุดเสาร์-อาทิตย์/วันหยุดที่ตั้งไว้</small>
+      </div>
+
+      <div class="subject-actions">
+        <button class="btn-save" onclick="saveScheduleOnly()" style="background:linear-gradient(135deg,#16a34a,#15803d);min-width:210px;">💾 บันทึกเวลาเรียน</button>
+        <button class="btn-next" onclick="goCourseSubTab('units')">ถัดไป: หน่วยการเรียนรู้</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="coursePanel_units" class="course-subpanel" style="display:none;">
+    <div class="card mb-0" style="background:#ffffff;border:1px solid #dcfce7;">
+      <div class="subject-section-title">4) หน่วยการเรียนรู้และสัดส่วนคะแนน</div>
+
+      <div class="units-layout">
+        <div class="units-side">
+          <div class="card" style="background:#f8fafc;">
+            <div class="mini-title">สรุปคะแนน</div>
+            <div class="score-mini-list">
+              <div class="score-mini-item"><span>เทอม 1 คะแนนเก็บ</span><span class="val" id="show_t1_keep">0</span></div>
+              <div class="score-mini-item"><span>เทอม 1 คะแนนสอบ</span><span class="val" id="show_t1_exam">0</span></div>
+              <div class="score-mini-item" id="t2AutoBlock"><span>เทอม 2 คะแนนเก็บ / สอบ</span><span class="val"><span id="show_t2_keep">0</span> / <span id="show_t2_exam">0</span></span></div>
+            </div>
+            <div class="unit-side-note mt-2">เก็บ = รวมคะแนนทุกหน่วย ส่วนสอบ = คะแนนที่เหลือจากคะแนนเต็มของภาคเรียน</div>
+          </div>
+
+          <div class="card" style="background:#f8fafc;">
+            <div class="mini-title">แนวทางใช้งาน</div>
+            <div class="unit-side-note">1) ตั้งชื่อหน่วยและคะแนนเต็มของหน่วย<br>2) เพิ่มงานย่อยในแต่ละหน่วย<br>3) กดอัปเดตตารางเมื่อแก้โครงสร้างคะแนนเสร็จ</div>
           </div>
         </div>
 
-        <div class="cfg-block" id="t2AutoBlock">
-          <div class="cfg-ttl" style="color:#0e7490;">เทอม 2 (คำนวณอัตโนมัติ)</div>
-          <div class="cfg-inline">
-            <div class="cfg-n" id="show_t2_keep" style="background:#cffafe;color:#155e75;display:flex;align-items:center;justify-content:center;">0</div>
-            <div class="cfg-n" id="show_t2_exam" style="background:#fef3c7;color:#92400e;display:flex;align-items:center;justify-content:center;">0</div>
+        <div class="units-main">
+          <div class="card" style="background:#f8fafc;">
+            <div class="ttabs mb-0">
+              <button class="ttab on" onclick="switchTerm(1,this)">เทอม 1</button>
+              <button class="ttab" id="tabTerm2Btn" onclick="switchTerm(2,this)">เทอม 2</button>
+            </div>
           </div>
-          <div style="font-size:.78rem;color:var(--muted);margin-top:4px;">
-            เก็บ = รวมคะแนนทุกหน่วย / สอบ = ส่วนที่เหลือจากคะแนนเต็ม
+
+          <div id="subPanel_1">
+            <div class="raw-preview mb-2">
+              <span>คะแนนรวมทุกหน่วย เทอม 1:</span>
+              <strong id="sum_t1_units">0</strong>
+              <span>/</span>
+              <span class="res">50</span>
+            </div>
+            <div class="sub-list" id="subList_1"></div>
+            <button class="btn-add-sub" onclick="addSub(1)">＋ เพิ่มหน่วยการเรียนรู้ เทอม 1</button>
           </div>
+
+          <div id="subPanel_2" style="display:none;">
+            <div class="raw-preview mb-2">
+              <span>คะแนนรวมทุกหน่วย เทอม 2:</span>
+              <strong id="sum_t2_units">0</strong>
+              <span>/</span>
+              <span class="res">50</span>
+            </div>
+            <div class="sub-list" id="subList_2"></div>
+            <button class="btn-add-sub" onclick="addSub(2)">＋ เพิ่มหน่วยการเรียนรู้ เทอม 2</button>
+          </div>
+
+          <button class="btn-apply mt-4" onclick="applySubConfig()">🔄 อัปเดตตาราง</button>
+          <button class="btn-save w-100 mt-2" onclick="saveScoreConfigOnly()" style="background:linear-gradient(135deg,#16a34a,#15803d);">💾 บันทึกการตั้งค่าคะแนน</button>
         </div>
       </div>
     </div>
-
-    <div class="ttabs mb-3">
-      <button class="ttab on" onclick="switchTerm(1,this)">เทอม 1</button>
-      <button class="ttab" id="tabTerm2Btn" onclick="switchTerm(2,this)">เทอม 2</button>
-    </div>
-
-    <div id="indicatorCoverageGlobal" class="coverage-card"></div>
-
-    <div id="subPanel_1">
-      <div class="raw-preview mb-2">
-        <span>คะแนนรวมทุกหน่วย เทอม 1:</span>
-        <strong id="sum_t1_units">0</strong>
-        <span>/</span>
-        <span class="res">50</span>
-      </div>
-
-      <div class="unit-tab-wrap">
-        <div class="unit-tabs" id="unitTabs_1"></div>
-      </div>
-
-      <div id="unitEditor_1"></div>
-
-      <button class="btn-add-sub" onclick="addSub(1)">＋ เพิ่มหน่วยการเรียนรู้ เทอม 1</button>
-    </div>
-
-    <div id="subPanel_2" style="display:none;">
-      <div class="raw-preview mb-2">
-        <span>คะแนนรวมทุกหน่วย เทอม 2:</span>
-        <strong id="sum_t2_units">0</strong>
-        <span>/</span>
-        <span class="res">50</span>
-      </div>
-
-      <div class="unit-tab-wrap">
-        <div class="unit-tabs" id="unitTabs_2"></div>
-      </div>
-
-      <div id="unitEditor_2"></div>
-
-      <button class="btn-add-sub" onclick="addSub(2)">＋ เพิ่มหน่วยการเรียนรู้ เทอม 2</button>
-    </div>
-
-    <button class="btn-apply mt-4" onclick="applySubConfig()">🔄 อัปเดตตาราง</button>
-
-    <button class="btn-save w-100 mt-2" onclick="saveScoreConfigOnly()" style="background:linear-gradient(135deg,#16a34a,#15803d);">
-      💾 บันทึกการตั้งค่าคะแนน
-    </button>
   </div>
-
 </div>
 
 <!-- ===== TAB: ข้อมูลโรงเรียน ===== -->
