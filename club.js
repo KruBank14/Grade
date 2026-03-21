@@ -28,6 +28,8 @@ function _clubShortDate(dStr) {
 function renderClubPanel() {
   const wrap = $('clubContainer'); if (!wrap) return;
   _renderClubMain();
+  // โหลดข้อมูลชุมนุมที่บันทึกไว้อัตโนมัติ
+  loadSavedClub();
 }
 
 function switchClubTab(term, btn) {
@@ -86,6 +88,73 @@ async function loadAllClubStudents() {
     else Utils.toast(`✅ โหลดรายชื่อสำเร็จทั้ง ${successCount} ชั้น`);
 
     _renderClubMain();
+  } catch(e) { Utils.toast(e.message, 'error'); Utils.hideLoading(); }
+}
+
+// ── โหลดข้อมูลชุมนุมที่บันทึกไว้ (เรียกอัตโนมัติตอนเปิดหน้า) ──────
+async function loadSavedClub() {
+  const year = $('gYear').value;
+  if (!year) { Utils.toast('กรุณาเลือกปีการศึกษาก่อน', 'error'); return; }
+  const t = Club.term;
+  const classes = [...new Set(CONFIG.ALL_CLS.map(c => c.replace(/ เทอม [12]/g, '').trim()))];
+
+  Utils.showLoading('โหลดข้อมูลชุมนุม...');
+  try {
+    const savedResults = await Promise.all(
+      classes.map(cls =>
+        api('getClubsByClassroom', { year, classroom: cls, term: t })
+          .then(res => ({ cls, students: res.students || [] }))
+          .catch(() => ({ cls, students: [] }))
+      )
+    );
+
+    const savedMembers = [];
+    const savedResultMap = {};
+    let savedClubName = '';
+
+    savedResults.forEach(({ cls, students }) => {
+      students.forEach(s => {
+        if (s.clubName) {
+          savedMembers.push({ studentId: s.studentId, name: s.name, classroom: cls });
+          if (s.result) savedResultMap[s.studentId] = s.result;
+          if (!savedClubName) savedClubName = s.clubName;
+        }
+      });
+    });
+
+    if (savedMembers.length === 0) {
+      Utils.toast('ยังไม่มีข้อมูลชุมนุมที่บันทึกไว้');
+      Utils.hideLoading();
+      return;
+    }
+
+    Club.members    = savedMembers;
+    Club.resultMap  = savedResultMap;
+    if (savedClubName) Club.clubName = savedClubName;
+
+    // โหลด topics + attArray
+    try {
+      const attRes = await api('getClubAttendanceDetail', {
+        year,
+        members: savedMembers.map(m => ({ studentId: m.studentId, classroom: m.classroom })),
+        term: t
+      });
+      const aMap = attRes.attendanceMap || {};
+      if (attRes.topics && attRes.topics.length) Club.topics = attRes.topics;
+      if (attRes.teacher)   Club.teacher   = attRes.teacher;
+      if (attRes.dayOfWeek) Club.dayOfWeek = attRes.dayOfWeek;
+      if (attRes.clubName)  Club.clubName  = attRes.clubName;
+      savedMembers.forEach(m => {
+        const d = aMap[m.studentId];
+        if (d) {
+          Club.attMap[m.studentId]    = d.attArray || [];
+          Club.resultMap[m.studentId] = d.result   || 'ไม่ผ่าน';
+        }
+      });
+    } catch(e) { /* ยังไม่มีกิจกรรม — ไม่ error */ }
+
+    Utils.toast(`✅ โหลดชุมนุม "${Club.clubName}" ${savedMembers.length} คน`);
+    _renderClubMain();
   } catch(e) { Utils.toast(e.message, 'error'); }
   Utils.hideLoading();
 }
@@ -136,11 +205,17 @@ function _renderClubMain() {
 
       <hr style="border-color:#fde68a;margin:10px 0;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
-        <div style="font-size:12px;font-weight:700;color:#92400e;">เพิ่มนักเรียนเข้าชุมนุม</div>
-        <button class="btn-pri" style="padding:6px 16px;font-size:.82rem;background:linear-gradient(135deg,#d97706,#b45309);"
-          onclick="loadAllClubStudents()">
-          ${Club.loaded ? '🔄 รีโหลดรายชื่อ' : '📋 โหลดรายชื่อทุกชั้น'}
-        </button>
+        <div style="font-size:12px;font-weight:700;color:#92400e;">เพิ่ม/ลบสมาชิกชุมนุม</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn-pri" style="padding:6px 14px;font-size:.82rem;background:#6b7280;"
+            onclick="loadSavedClub()">
+            📂 โหลดชุมนุมที่บันทึกไว้
+          </button>
+          <button class="btn-pri" style="padding:6px 14px;font-size:.82rem;background:linear-gradient(135deg,#d97706,#b45309);"
+            onclick="loadAllClubStudents()">
+            ${Club.loaded ? '🔄 รีโหลดรายชื่อ' : '👥 จัดการสมาชิก'}
+          </button>
+        </div>
       </div>
       <div id="clubStudentPicker">
         ${!Club.loaded ? `<div style="font-size:13px;color:#9ca3af;padding:6px 0;">กดโหลดรายชื่อเพื่อเลือกนักเรียน</div>` : ''}
