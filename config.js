@@ -23,6 +23,8 @@ const App = {
   units: { 1: [], 2: [] },
   expanded: { 1: true, 2: true },
   activeUnitTab: { 1: 0, 2: 0 },
+  indicatorCoverageFilter: 'all',
+  indicatorCoverageTermFilter: 'all',
   editTid: null,
   editAssigned: [],
   ignoreR: false,
