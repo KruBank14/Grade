@@ -115,6 +115,91 @@ function getUnitIndicatorBadges(unit) {
   return (unit?.indicators || []).map(key => imap[key]).filter(Boolean);
 }
 
+function getIndicatorUsageOverview() {
+  const catalog = getIndicatorCatalog();
+  const byKey = Object.fromEntries(catalog.map(item => [item.key, { ...item, units: [] }]));
+  const terms = App.isSemMode ? [1] : [1, 2];
+
+  terms.forEach(t => {
+    (App.units?.[t] || []).forEach((unit, ui) => {
+      const unitName = String(unit?.name || `หน่วย ${ui + 1}`).trim() || `หน่วย ${ui + 1}`;
+      const keys = Array.isArray(unit?.indicators) ? [...new Set(unit.indicators.map(String))] : [];
+      keys.forEach(key => {
+        if (!byKey[key]) return;
+        byKey[key].units.push({
+          term: t,
+          unitIndex: ui,
+          unitName,
+          shortLabel: `ท${t} · ${unitName}`
+        });
+      });
+    });
+  });
+
+  const all = Object.values(byKey);
+  return {
+    total: all.length,
+    used: all.filter(item => item.units.length),
+    unused: all.filter(item => !item.units.length)
+  };
+}
+
+function renderIndicatorCoverageSummary() {
+  const wrap = $('indicatorCoverageGlobal');
+  if (!wrap) return;
+
+  const overview = getIndicatorUsageOverview();
+  if (!overview.total) {
+    wrap.innerHTML = `
+      <div class="coverage-head">
+        <div class="coverage-title">สรุปการผูกตัวชี้วัดกับหน่วยการเรียนรู้</div>
+      </div>
+      <div class="coverage-empty">ยังไม่มีตัวชี้วัดในหน้ารายวิชา กรุณากำหนดตัวชี้วัดระหว่างทางหรือปลายทางก่อน</div>
+    `;
+    return;
+  }
+
+  const renderItem = (item, withLinks) => `
+    <div class="coverage-item">
+      <div class="coverage-item-top"><strong>${item.label}</strong>${item.text}</div>
+      ${withLinks ? `
+        <div class="coverage-links">
+          ${item.units.map(u => `<span class="coverage-link">${u.shortLabel}</span>`).join('')}
+        </div>
+      ` : ''}
+    </div>
+  `;
+
+  wrap.innerHTML = `
+    <div class="coverage-head">
+      <div class="coverage-title">สรุปการผูกตัวชี้วัดกับหน่วยการเรียนรู้</div>
+      <div class="coverage-stats">
+        <span class="coverage-stat total">ทั้งหมด ${overview.total} ข้อ</span>
+        <span class="coverage-stat used">ผูกแล้ว ${overview.used.length} ข้อ</span>
+        <span class="coverage-stat unused">ยังไม่ผูก ${overview.unused.length} ข้อ</span>
+      </div>
+    </div>
+    <div class="coverage-grid">
+      <div class="coverage-col">
+        <div class="coverage-col-title warn">ตัวชี้วัดที่ยังไม่ถูกผูกกับหน่วยใดเลย</div>
+        ${overview.unused.length ? `
+          <div class="coverage-list">
+            ${overview.unused.map(item => renderItem(item, false)).join('')}
+          </div>
+        ` : `<div class="coverage-empty">ครบแล้ว ทุกตัวชี้วัดถูกผูกกับหน่วยการเรียนรู้แล้ว</div>`}
+      </div>
+      <div class="coverage-col">
+        <div class="coverage-col-title ok">ตัวชี้วัดที่ผูกแล้ว</div>
+        ${overview.used.length ? `
+          <div class="coverage-list">
+            ${overview.used.map(item => renderItem(item, true)).join('')}
+          </div>
+        ` : `<div class="coverage-empty">ยังไม่มีตัวชี้วัดที่ถูกผูกกับหน่วยการเรียนรู้</div>`}
+      </div>
+    </div>
+  `;
+}
+
 function toggleUnitIndicator(t, ui, key, checked) {
   const unit = App.units?.[t]?.[ui];
   if (!unit) return;
@@ -272,6 +357,7 @@ function renderSubList(t) {
 
   renderUnitTabs(t);
   renderUnitEditor(t);
+  renderIndicatorCoverageSummary();
   updateAutoScoreDisplay();
 }
 
@@ -605,6 +691,7 @@ function setCourseInfoForm(c = {}, subj = '') {
   $('ci_description').value = c.description || '';
   $('ci_indicators_formative').value = indicatorBuckets.formative.join('\n');
   $('ci_indicators_summative').value = indicatorBuckets.summative.join('\n');
+  renderIndicatorCoverageSummary();
   ['mon','tue','wed','thu','fri'].forEach(d => $(`sch_${d}`).value = c.schedule?.[d] || 0);
   $('ci_manual_adjust').value = c.schedule?.manualAdjust || 0;
   $('ci_total_hours').textContent = c.schedule?.totalHours || 0;
@@ -693,7 +780,7 @@ async function saveSchoolProfile() {
   Utils.hideLoading();
 }
 
-async function saveCourseMetaOnly() { if (!$('ci_name').value.trim()) $('ci_name').value = $('gSubj').value || ''; if (await saveConfigOnly()) Utils.toast('✅ บันทึกข้อมูลวิชาเรียบร้อย'); }
+async function saveCourseMetaOnly() { if (!$('ci_name').value.trim()) $('ci_name').value = $('gSubj').value || ''; const ok = await saveConfigOnly(); renderIndicatorCoverageSummary(); if (ok) Utils.toast('✅ บันทึกข้อมูลวิชาเรียบร้อย'); }
 async function saveScheduleOnly() { if (await saveConfigOnly()) Utils.toast('✅ บันทึกเวลาเรียนเรียบร้อย'); }
 async function saveScoreConfigOnly() { if (await saveConfigOnly()) Utils.toast('✅ บันทึกการตั้งค่าคะแนนเรียบร้อย'); }
 
