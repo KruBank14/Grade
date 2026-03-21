@@ -3,7 +3,7 @@
 const ScoreLogic = {
   getTarget: t => App.isSemMode ? 100 : 50,
   getUnitsMax: t => (App.units[t] ||[]).reduce((s, u) => s + (Number(u.max) || 0), 0),
-  getExamMax: t => Math.max(0, ScoreLogic.getTarget(t) - ScoreLogic.getUnitsMax(t)),
+  getExamMax: t => App.exam?.[t]?.score != null ? Number(App.exam[t].score) : Math.max(0, ScoreLogic.getTarget(t) - ScoreLogic.getUnitsMax(t)),
   getUnitRawMax: (t, uIdx) => ((App.units[t][uIdx] || {}).items ||[]).reduce((s, i) => s + (Number(i.max) || 0), 0),
   getUnitOffsets: t => {
     let off = 0;
@@ -63,11 +63,11 @@ function updateAutoScoreDisplay() {
   const QUOTA = App.isSemMode ? 100 : 50;
   const setScoreTxt = (t) => {
     const k = ScoreLogic.getUnitsMax(t);
-    const e = App.exam?.[t]?.score ?? Math.max(0, QUOTA - k);
+    const e = ScoreLogic.getExamMax(t);
+    const total = k + e;
     if ($(`show_t${t}_keep`)) $(`show_t${t}_keep`).textContent = k;
     if ($(`show_t${t}_exam`)) $(`show_t${t}_exam`).textContent = e;
     if ($(`show_t${t}_total`)) {
-      const total = k + e;
       const el = $(`show_t${t}_total`);
       el.textContent = total;
       el.style.color = total === QUOTA ? '#16a34a' : '#d97706';
