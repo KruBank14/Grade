@@ -37,51 +37,43 @@ function switchClubTab(term, btn) {
 
 async function loadAllClubStudents() {
   const year = $('gYear').value;
+  const cls  = $('gClass').value;
 
-  // ตรวจสอบปีก่อนโหลด
-  if (!year) {
-    Utils.toast('กรุณาเลือกปีการศึกษาก่อน', 'error');
+  if (!year) { Utils.toast('กรุณาเลือกปีการศึกษาก่อน', 'error'); return; }
+
+  // ใช้ App.students ที่โหลดมาแล้วจาก getGrades — ไม่ต้องยิง API ใหม่
+  if (!App.students || !App.students.length) {
+    Utils.toast('กรุณาโหลดตารางคะแนนก่อน เพื่อดึงรายชื่อนักเรียน', 'error');
     return;
   }
 
   const t = Club.term;
-  const classes = CONFIG.ALL_CLS.filter(c => !c.includes('เทอม'));
-  Utils.showLoading('โหลดรายชื่อทุกชั้น...');
+  Utils.showLoading('โหลดรายชื่อ...');
   try {
-    const results = await Promise.all(
-      classes.map(cls =>
-        api('getClubStudentsForClass', { year, classroom: cls, term: t })
-          .then(res => ({ cls, students: res.students || [], error: null }))
-          .catch(e => ({ cls, students: [], error: e.message || 'โหลดไม่สำเร็จ' }))
-      )
-    );
+    // ดึง clubMap ของชั้นปัจจุบันจาก GAS เพื่อรู้ว่าใครอยู่ชุมนุมอื่นแล้ว
+    let clubMap = {};
+    try {
+      const res = await api('getClubsByClassroom', { year, classroom: cls, term: t });
+      (res.students || []).forEach(s => {
+        if (s.clubName) clubMap[s.studentId] = s.clubName;
+      });
+    } catch(e) { /* ยังไม่มีชีทชุมนุม — ไม่ error */ }
 
+    // จัดรายชื่อนักเรียนชั้นปัจจุบันเข้า allClassStudents
     Club.allClassStudents = {};
     Club.loadErrors = {};
 
-    results.forEach(({ cls, students, error }) => {
-      Club.allClassStudents[cls] = students;
-      if (error) Club.loadErrors[cls] = error;
-    });
+    // ใส่นักเรียนชั้นที่โหลดอยู่ (App.students) พร้อมข้อมูล inOtherClub
+    Club.allClassStudents[cls] = App.students.map(s => ({
+      studentId:   s.studentId,
+      name:        s.name,
+      inOtherClub: !!(clubMap[s.studentId] && !Club.members.some(m => m.studentId === s.studentId)),
+      clubName:    clubMap[s.studentId] || ''
+    }));
 
-    // นับจำนวนชั้นที่โหลดสำเร็จ / ล้มเหลว
-    const successCount = results.filter(r => !r.error && r.students.length > 0).length;
-    const failCount    = results.filter(r => !!r.error).length;
-
-    if (successCount === 0 && failCount > 0) {
-      // ทุกชั้นโหลดไม่ได้เลย — แสดง error ของชั้นแรก
-      const firstError = results.find(r => r.error);
-      Utils.toast('โหลดรายชื่อไม่สำเร็จ: ' + firstError.error, 'error');
-    } else if (failCount > 0) {
-      Utils.toast(`⚠️ โหลดสำเร็จ ${successCount} ชั้น, ไม่สำเร็จ ${failCount} ชั้น`, 'error');
-    } else {
-      Utils.toast(`✅ โหลดรายชื่อสำเร็จ ${successCount} ชั้น`);
-    }
-
-    // เลือก tab ชั้นแรกที่มีรายชื่อ
-    const firstCls = classes.find(c => (Club.allClassStudents[c] || []).length > 0) || classes[0];
-    Club.activeClassTab = firstCls;
+    Club.activeClassTab = cls;
     Club.loaded = true;
+    Utils.toast(`✅ โหลดรายชื่อสำเร็จ ${Club.allClassStudents[cls].length} คน`);
     _renderClubMain();
   } catch(e) { Utils.toast(e.message, 'error'); }
   Utils.hideLoading();
@@ -189,33 +181,14 @@ function _renderClubMain() {
 
 function _renderClubStudentPicker() {
   const wrap = $('clubStudentPicker'); if (!wrap) return;
-  const classes = CONFIG.ALL_CLS.filter(c => !c.includes('เทอม'));
-  const activeCls = Club.activeClassTab || classes[0];
-
-  const tabsHtml = classes.map(cls => {
-    const selected  = Club.members.filter(m => m.classroom === cls).length;
-    const hasError  = !!Club.loadErrors[cls];
-    const on        = cls === activeCls;
-    const borderCol = on ? '#d97706' : hasError ? '#fca5a5' : '#e5e7eb';
-    const bgCol     = on ? '#fef3c7' : hasError ? '#fff1f2' : '#fff';
-    const textCol   = on ? '#92400e' : hasError ? '#b91c1c' : '#6b7280';
-    return `<button type="button"
-      style="padding:4px 12px;border-radius:20px;white-space:nowrap;cursor:pointer;font-size:12px;
-        border:1px solid ${borderCol};background:${bgCol};color:${textCol};"
-      onclick="switchClubClassTab('${cls}')"
-      title="${hasError ? Club.loadErrors[cls] : ''}">
-      ${cls}${hasError ? ' ⚠️' : ''}${selected > 0 ? ` <span style="background:#d97706;color:#fff;border-radius:10px;padding:0 5px;font-size:11px;">${selected}</span>` : ''}
-    </button>`;
-  }).join('');
-
-  const students   = Club.allClassStudents[activeCls] || [];
-  const errorMsg   = Club.loadErrors[activeCls];
+  const activeCls = Club.activeClassTab;
+  const students  = Club.allClassStudents[activeCls] || [];
+  const errorMsg  = Club.loadErrors ? Club.loadErrors[activeCls] : null;
 
   let chipsHtml;
   if (errorMsg) {
-    // แสดง error message แทน "ไม่พบรายชื่อ"
     chipsHtml = `<div style="font-size:12px;color:#b91c1c;padding:8px;background:#fff1f2;border-radius:6px;border:1px solid #fecaca;">
-      ⚠️ โหลดรายชื่อชั้น ${activeCls} ไม่สำเร็จ<br>
+      ⚠️ โหลดรายชื่อไม่สำเร็จ<br>
       <span style="color:#6b7280;font-size:11px;">${errorMsg}</span>
     </div>`;
   } else if (students.length === 0) {
@@ -233,16 +206,13 @@ function _renderClubStudentPicker() {
         return `<div style="display:inline-flex;align-items:center;gap:3px;padding:4px 10px;
           border-radius:20px;border:1px solid ${border};background:${bg};font-size:12px;color:${color};
           cursor:${inOther?'not-allowed':'pointer'};user-select:none;${inOther?'opacity:.5;':''}"
-          onclick="${inOther?'':` toggleClubMember('${s.studentId}','${s.name.replace(/'/g,"\\'")}','${activeCls}')`}">
+          onclick="${inOther?'':` toggleClubMember('${s.studentId}','${s.name.replace(/'/g,"\'")}','${activeCls}')`}">
           ${check}${s.name}${tag}
         </div>`;
       }).join('') + `</div>`;
   }
 
-  wrap.innerHTML = `
-    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">${tabsHtml}</div>
-    <div style="max-height:200px;overflow-y:auto;">${chipsHtml}</div>
-  `;
+  wrap.innerHTML = `<div style="max-height:200px;overflow-y:auto;">${chipsHtml}</div>`;
 }
 
 function toggleClubMember(sid, name, classroom) {
