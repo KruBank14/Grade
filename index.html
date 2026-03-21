@@ -1701,9 +1701,10 @@ body{
             <div class="score-mini-list">
               <div class="score-mini-item"><span>เทอม 1 คะแนนเก็บ</span><span class="val" id="show_t1_keep">0</span></div>
               <div class="score-mini-item"><span>เทอม 1 คะแนนสอบ</span><span class="val" id="show_t1_exam">0</span></div>
+              <div class="score-mini-item"><span>เทอม 1 รวม</span><span class="val" id="show_t1_total">0</span></div>
               <div class="score-mini-item" id="t2AutoBlock"><span>เทอม 2 คะแนนเก็บ / สอบ</span><span class="val"><span id="show_t2_keep">0</span> / <span id="show_t2_exam">0</span></span></div>
             </div>
-            <div class="unit-side-note mt-2">เก็บ = รวมคะแนนทุกหน่วย ส่วนสอบ = คะแนนที่เหลือจากคะแนนเต็มของภาคเรียน</div>
+            <div class="unit-side-note mt-2">เก็บ = รวมคะแนนทุกหน่วย<br>สอบ = กำหนดในแท็บ "สอบ" ของแต่ละเทอม</div>
           </div>
 
           <div class="card" style="background:#f8fafc;">
@@ -1721,25 +1722,11 @@ body{
           </div>
 
           <div id="subPanel_1">
-            <div class="raw-preview mb-2">
-              <span>คะแนนรวมทุกหน่วย เทอม 1:</span>
-              <strong id="sum_t1_units">0</strong>
-              <span>/</span>
-              <span class="res">50</span>
-            </div>
             <div class="sub-list" id="subList_1"></div>
-            <button class="btn-add-sub" onclick="addSub(1)">＋ เพิ่มหน่วยการเรียนรู้ เทอม 1</button>
           </div>
 
           <div id="subPanel_2" style="display:none;">
-            <div class="raw-preview mb-2">
-              <span>คะแนนรวมทุกหน่วย เทอม 2:</span>
-              <strong id="sum_t2_units">0</strong>
-              <span>/</span>
-              <span class="res">50</span>
-            </div>
             <div class="sub-list" id="subList_2"></div>
-            <button class="btn-add-sub" onclick="addSub(2)">＋ เพิ่มหน่วยการเรียนรู้ เทอม 2</button>
           </div>
 
           <button class="btn-apply mt-4" onclick="applySubConfig()">🔄 อัปเดตตาราง</button>
