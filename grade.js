@@ -136,31 +136,29 @@ function getIndicatorUsageOverview() {
     });
   });
 
-  const all = Object.values(byKey)
-    .map(item => ({ ...item, usageCount: item.units.length }))
-    .sort((a, b) => {
-      if (a.type !== b.type) return a.type === 'formative' ? -1 : 1;
-      return a.label.localeCompare(b.label, 'th');
-    });
-
+  const all = Object.values(byKey);
   return {
     total: all.length,
-    all,
-    used: all.filter(item => item.usageCount > 0),
-    unused: all.filter(item => item.usageCount === 0),
-    totalMappings: all.reduce((sum, item) => sum + item.usageCount, 0)
+    used: all.filter(item => item.units.length),
+    unused: all.filter(item => !item.units.length)
   };
 }
 
-function setIndicatorCoverageFilter(filter) {
-  App.indicatorCoverageFilter = filter || 'all';
-  renderIndicatorCoverageSummary();
-}
+function jumpToUnitFromCoverage(term, unitIndex) {
+  if (!App.units?.[term]?.[unitIndex]) return;
 
-function setIndicatorCoverageTermFilter(term) {
-  const next = String(term || 'all');
-  App.indicatorCoverageTermFilter = next;
-  renderIndicatorCoverageSummary();
+  const tabBtn = term === 2 ? $('tabTerm2Btn') : document.querySelector('.ttabs .ttab');
+  switchTerm(term, tabBtn || null);
+  App.activeUnitTab[term] = unitIndex;
+  renderSubList(term);
+
+  setTimeout(() => {
+    const panel = $(`subPanel_${term}`);
+    const target = $(`unitEditor_${term}`) || panel;
+    if (target?.scrollIntoView) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, 40);
 }
 
 function renderIndicatorCoverageSummary() {
@@ -168,12 +166,7 @@ function renderIndicatorCoverageSummary() {
   if (!wrap) return;
 
   const overview = getIndicatorUsageOverview();
-  const filter = App.indicatorCoverageFilter || 'all';
-  wrap.classList.toggle('has-unused', overview.unused.length > 0);
-
   if (!overview.total) {
-    App.indicatorCoverageFilter = 'all';
-    wrap.classList.remove('has-unused');
     wrap.innerHTML = `
       <div class="coverage-head">
         <div class="coverage-title">สรุปการผูกตัวชี้วัดกับหน่วยการเรียนรู้</div>
@@ -183,143 +176,44 @@ function renderIndicatorCoverageSummary() {
     return;
   }
 
-  const filterMap = {
-    all: {
-      title: 'แสดงทั้งหมด',
-      items: overview.all
-    },
-    unused: {
-      title: 'เฉพาะข้อที่ยังไม่ใช้',
-      items: overview.all.filter(item => item.usageCount === 0)
-    },
-    single: {
-      title: 'เฉพาะข้อที่ใช้ 1 หน่วย',
-      items: overview.all.filter(item => item.usageCount === 1)
-    },
-    multi: {
-      title: 'เฉพาะข้อที่ใช้ซ้ำมากกว่า 1 หน่วย',
-      items: overview.all.filter(item => item.usageCount > 1)
-    }
-  };
-
-  const currentFilter = filterMap[filter] ? filter : 'all';
-  if (currentFilter !== filter) App.indicatorCoverageFilter = currentFilter;
-
-  const renderItem = (item, withLinks, displayUsageCount = item.usageCount) => {
-    const level = displayUsageCount === 0 ? 'zero' : displayUsageCount === 1 ? 'single' : 'multi';
-    const levelText = displayUsageCount === 0 ? 'ยังไม่ใช้' : displayUsageCount === 1 ? 'ใช้พอดี' : `ใช้ซ้ำ ${displayUsageCount} หน่วย`;
-    return `
-      <div class="coverage-item ${displayUsageCount === 0 ? 'unused' : displayUsageCount === 1 ? 'single' : 'multi'}">
-        <div class="coverage-item-top"><strong>${item.label}</strong>${item.text}</div>
-        <div class="coverage-meta">
-          <span class="coverage-count ${level}">ใช้ ${displayUsageCount} หน่วย</span>
-          <span class="coverage-level ${level}">${levelText}</span>
+  const renderItem = (item, withLinks) => `
+    <div class="coverage-item">
+      <div class="coverage-item-top"><strong>${item.label}</strong>${item.text}</div>
+      ${withLinks ? `
+        <div class="coverage-links">
+          ${item.units.map(u => `<button type="button" class="coverage-link coverage-link-jump" onclick="jumpToUnitFromCoverage(${u.term}, ${u.unitIndex})" title="เปิด${u.shortLabel}">${u.shortLabel}</button>`).join('')}
         </div>
-        ${withLinks && item.units?.length ? `
-          <div class="coverage-links">
-            ${item.units.map(u => `<span class="coverage-link">${u.shortLabel}</span>`).join('')}
-          </div>
-        ` : ''}
-      </div>
-    `;
-  };
-
-  const singleCount = overview.all.filter(item => item.usageCount === 1).length;
-  const multiCount = overview.all.filter(item => item.usageCount > 1).length;
-
-  const filterButtons = `
-    <div class="coverage-filters">
-      <button type="button" class="coverage-filter ${currentFilter === 'all' ? 'active' : ''}" onclick="setIndicatorCoverageFilter('all')">ทั้งหมด ${overview.total}</button>
-      <button type="button" class="coverage-filter unused ${currentFilter === 'unused' ? 'active' : ''}" onclick="setIndicatorCoverageFilter('unused')">ยังไม่ใช้ ${overview.unused.length}</button>
-      <button type="button" class="coverage-filter single ${currentFilter === 'single' ? 'active' : ''}" onclick="setIndicatorCoverageFilter('single')">ใช้ 1 หน่วย ${singleCount}</button>
-      <button type="button" class="coverage-filter multi ${currentFilter === 'multi' ? 'active' : ''}" onclick="setIndicatorCoverageFilter('multi')">ใช้ซ้ำ ${multiCount}</button>
+      ` : ''}
     </div>
   `;
-
-  const currentTermFilter = App.indicatorCoverageTermFilter || 'all';
-  const termFilterMap = {
-    all: { title: 'ทุกเทอม', match: () => true },
-    t1: { title: 'เฉพาะเทอม 1', match: item => item.units.some(u => u.term === 1) },
-    t2: { title: 'เฉพาะเทอม 2', match: item => item.units.some(u => u.term === 2) }
-  };
-  const safeTermFilter = termFilterMap[currentTermFilter] ? currentTermFilter : 'all';
-  if (safeTermFilter !== currentTermFilter) App.indicatorCoverageTermFilter = safeTermFilter;
-
-  const termButtons = App.isSemMode ? '' : `
-    <div class="coverage-term-filters">
-      <button type="button" class="coverage-filter ${safeTermFilter === 'all' ? 'active' : ''}" onclick="setIndicatorCoverageTermFilter('all')">ทุกเทอม</button>
-      <button type="button" class="coverage-filter term ${safeTermFilter === 't1' ? 'active' : ''}" onclick="setIndicatorCoverageTermFilter('t1')">เทอม 1</button>
-      <button type="button" class="coverage-filter term ${safeTermFilter === 't2' ? 'active' : ''}" onclick="setIndicatorCoverageTermFilter('t2')">เทอม 2</button>
-    </div>
-  `;
-
-  const applyTermFilter = (items) => {
-    if (safeTermFilter === 'all') return items;
-    return items
-      .map(item => ({
-        ...item,
-        units: item.units.filter(u => termFilterMap[safeTermFilter].match({ units: [u] }))
-      }))
-      .filter(item => safeTermFilter === 'all' ? true : (item.usageCount === 0 ? true : item.units.length > 0));
-  };
-
-  const filteredItems = applyTermFilter(filterMap[currentFilter].items).map(item => ({
-    ...item,
-    displayUsageCount: safeTermFilter === 'all' ? item.usageCount : item.units.length
-  }));
-
-  const unusedItems = applyTermFilter(overview.unused).map(item => ({ ...item, displayUsageCount: 0 }));
-  const usedItems = applyTermFilter(overview.used)
-    .map(item => ({ ...item, displayUsageCount: safeTermFilter === 'all' ? item.usageCount : item.units.length }))
-    .filter(item => item.displayUsageCount > 0);
-
-  const filteredList = filteredItems.length
-    ? `<div class="coverage-list coverage-list-wide">${filteredItems.map(item => renderItem(item, item.displayUsageCount > 0, item.displayUsageCount)).join('')}</div>`
-    : `<div class="coverage-empty">ไม่มีรายการตามตัวกรองนี้</div>`;
 
   wrap.innerHTML = `
-    ${overview.unused.length ? `
-      <div class="coverage-alert">
-        ⚠️ ยังมีตัวชี้วัด ${overview.unused.length} ข้อ ที่ยังไม่ถูกผูกกับหน่วยการเรียนรู้
-        <small>เมื่อกดบันทึกการตั้งค่าคะแนนหรือบันทึกคะแนน ระบบจะเตือนอีกครั้งก่อนบันทึก</small>
-      </div>
-    ` : ''}
     <div class="coverage-head">
       <div class="coverage-title">สรุปการผูกตัวชี้วัดกับหน่วยการเรียนรู้</div>
       <div class="coverage-stats">
         <span class="coverage-stat total">ทั้งหมด ${overview.total} ข้อ</span>
         <span class="coverage-stat used">ผูกแล้ว ${overview.used.length} ข้อ</span>
         <span class="coverage-stat unused">ยังไม่ผูก ${overview.unused.length} ข้อ</span>
-        <span class="coverage-stat total">ถูกใช้รวม ${overview.totalMappings} ครั้ง</span>
       </div>
     </div>
-    ${filterButtons}
-    ${termButtons}
-    ${currentFilter === 'all' ? `
-      <div class="coverage-grid">
-        <div class="coverage-col">
-          <div class="coverage-col-title warn">ตัวชี้วัดที่ยังไม่ถูกผูกกับหน่วยใดเลย${safeTermFilter !== 'all' ? ` · ${termFilterMap[safeTermFilter].title}` : ''}</div>
-          ${unusedItems.length ? `
-            <div class="coverage-list">
-              ${unusedItems.map(item => renderItem(item, false, 0)).join('')}
-            </div>
-          ` : `<div class="coverage-empty">${safeTermFilter === 'all' ? 'ครบแล้ว ทุกตัวชี้วัดถูกผูกกับหน่วยการเรียนรู้แล้ว' : 'ไม่มีตัวชี้วัดตกค้างในตัวกรองเทอมนี้'}</div>`}
-        </div>
-        <div class="coverage-col">
-          <div class="coverage-col-title ok">ตัวชี้วัดที่ผูกแล้ว${safeTermFilter !== 'all' ? ` · ${termFilterMap[safeTermFilter].title}` : ''}</div>
-          ${usedItems.length ? `
-            <div class="coverage-list">
-              ${usedItems.map(item => renderItem(item, true, item.displayUsageCount)).join('')}
-            </div>
-          ` : `<div class="coverage-empty">ยังไม่มีตัวชี้วัดที่ถูกผูกกับหน่วยการเรียนรู้</div>`}
-        </div>
+    <div class="coverage-grid">
+      <div class="coverage-col">
+        <div class="coverage-col-title warn">ตัวชี้วัดที่ยังไม่ถูกผูกกับหน่วยใดเลย</div>
+        ${overview.unused.length ? `
+          <div class="coverage-list">
+            ${overview.unused.map(item => renderItem(item, false)).join('')}
+          </div>
+        ` : `<div class="coverage-empty">ครบแล้ว ทุกตัวชี้วัดถูกผูกกับหน่วยการเรียนรู้แล้ว</div>`}
       </div>
-    ` : `
-      <div class="coverage-col coverage-col-full">
-        <div class="coverage-col-title ${currentFilter === 'unused' ? 'warn' : 'ok'}">${filterMap[currentFilter].title}${safeTermFilter !== 'all' ? ` · ${termFilterMap[safeTermFilter].title}` : ''}</div>
-        ${filteredList}
+      <div class="coverage-col">
+        <div class="coverage-col-title ok">ตัวชี้วัดที่ผูกแล้ว <span style="font-weight:600;color:#64748b;">(กดที่ป้ายเพื่อเปิดหน่วย)</span></div>
+        ${overview.used.length ? `
+          <div class="coverage-list">
+            ${overview.used.map(item => renderItem(item, true)).join('')}
+          </div>
+        ` : `<div class="coverage-empty">ยังไม่มีตัวชี้วัดที่ถูกผูกกับหน่วยการเรียนรู้</div>`}
       </div>
-    `}
+    </div>
   `;
 }
 
