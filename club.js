@@ -1,5 +1,5 @@
 // =====================================================
-// club.js — ระบบชุมนุม (โหลดทุกชั้นพร้อมกัน)
+// club.js — ระบบชุมนุม
 // =====================================================
 
 const Club = {
@@ -8,13 +8,22 @@ const Club = {
   teacher: '',
   dayOfWeek: '5',
   members: [],          // { studentId, name, classroom }
-  attendanceMap: {},    // studentId → { attArray, result, attended }
-  topics: [],
-  allClassStudents: {}, // { 'ป.1': [{studentId,name,inOtherClub,clubName},...], ... }
-  loadErrors: {},       // { 'ป.1': 'error message', ... }
+  topics: [],           // ['หัวข้อครั้งที่ 1', ...]
+  attMap: {},           // { studentId: ['ป','ข','ล',...] }
+  resultMap: {},        // { studentId: 'ผ่าน'|'ไม่ผ่าน' }
+  allClassStudents: {},
+  loadErrors: {},
   activeClassTab: '',
   loaded: false
 };
+
+// ── helpers ──────────────────────────────────────────
+function _clubShortDate(dStr) {
+  const m = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  const p = String(dStr).split('/');
+  if (p.length !== 3) return dStr;
+  return parseInt(p[0]) + ' ' + m[parseInt(p[1])-1] + ' ' + String(p[2]).slice(-2);
+}
 
 function renderClubPanel() {
   const wrap = $('clubContainer'); if (!wrap) return;
@@ -31,19 +40,12 @@ function switchClubTab(term, btn) {
   _renderClubMain();
 }
 
-// ── โหลดรายชื่อทุกชั้น ──
-// ใช้ getClubsByClassroom (มีอยู่แล้วใน GAS) ยิงพร้อมกันทุกชั้น
-// ได้ทั้งรายชื่อ + ข้อมูลว่าใครอยู่ชุมนุมอะไรแล้ว
+// ── โหลดรายชื่อทุกชั้น ──────────────────────────────
 async function loadAllClubStudents() {
   const year = $('gYear').value;
   if (!year) { Utils.toast('กรุณาเลือกปีการศึกษาก่อน', 'error'); return; }
-
-  // ใช้ App.subs (โหลดตอน login แล้ว) เพื่อรู้ว่าแต่ละชั้นมีวิชาอะไร
-  // แล้วยิง getGrades โดยเลือกวิชาแรกของชั้นนั้น → ได้ students[] กลับมา
-  // วิธีนี้ใช้ action "getGrades" ที่มีอยู่แล้วใน GAS ไม่ต้อง Deploy ใหม่
   if (!App.subs || !Object.keys(App.subs).length) {
-    Utils.toast('ไม่พบข้อมูลรายวิชา กรุณา Login ใหม่', 'error');
-    return;
+    Utils.toast('ไม่พบข้อมูลรายวิชา กรุณา Login ใหม่', 'error'); return;
   }
 
   const t       = Club.term;
@@ -53,23 +55,13 @@ async function loadAllClubStudents() {
   try {
     const results = await Promise.all(
       classes.map(async cls => {
-        // มัธยม key ใน App.subs คือ "ม.1 เทอม 1" ไม่ใช่ "ม.1"
-        // หา subject จาก key ที่ขึ้นต้นด้วยชั้นนั้น
         const subsKey = Object.keys(App.subs).find(k => k === cls || k.startsWith(cls + ' '));
         const subs = subsKey ? (App.subs[subsKey] || []) : [];
-        const classroomKey = subsKey || cls; // ใช้ key จริงตอนยิง getGrades
+        const classroomKey = subsKey || cls;
         if (!subs.length) return { cls, students: [], error: null };
-
-        // ยิง getGrades วิชาแรกของชั้นนั้น → ได้ students[]
         try {
           const res = await api('getGrades', { year, classroom: classroomKey, subject: subs[0] });
-          const students = (res.students || []).map(s => ({
-            studentId:   s.studentId,
-            name:        s.name,
-            inOtherClub: false,   // ยังไม่รู้ — จะอัปเดตทีหลังตอน saveClub
-            clubName:    ''
-          }));
-          return { cls, students, error: null };
+          return { cls, students: (res.students || []).map(s => ({ studentId: s.studentId, name: s.name, inOtherClub: false, clubName: '' })), error: null };
         } catch(e) {
           return { cls, students: [], error: e.message || 'โหลดไม่สำเร็จ' };
         }
@@ -77,31 +69,21 @@ async function loadAllClubStudents() {
     );
 
     Club.allClassStudents = {};
-    Club.loadErrors       = {};
-
+    Club.loadErrors = {};
     results.forEach(({ cls, students, error }) => {
-      if (error) {
-        Club.loadErrors[cls] = error;
-        Club.allClassStudents[cls] = [];
-      } else {
-        Club.allClassStudents[cls] = students;
-      }
+      Club.allClassStudents[cls] = students;
+      if (error) Club.loadErrors[cls] = error;
     });
 
     const successCount = results.filter(r => !r.error && r.students.length > 0).length;
     const failCount    = results.filter(r => !!r.error).length;
-
     const firstCls = classes.find(c => (Club.allClassStudents[c] || []).length > 0) || classes[0];
     Club.activeClassTab = firstCls;
     Club.loaded = true;
 
-    if (failCount > 0 && successCount === 0) {
-      Utils.toast('โหลดรายชื่อไม่สำเร็จทุกชั้น ตรวจสอบปีการศึกษา', 'error');
-    } else if (failCount > 0) {
-      Utils.toast(`⚠️ โหลดสำเร็จ ${successCount} ชั้น, ไม่สำเร็จ ${failCount} ชั้น`);
-    } else {
-      Utils.toast(`✅ โหลดรายชื่อสำเร็จทั้ง ${successCount} ชั้น`);
-    }
+    if (failCount > 0 && successCount === 0) Utils.toast('โหลดรายชื่อไม่สำเร็จ ตรวจสอบปีการศึกษา', 'error');
+    else if (failCount > 0) Utils.toast(`⚠️ โหลดสำเร็จ ${successCount} ชั้น, ไม่สำเร็จ ${failCount} ชั้น`);
+    else Utils.toast(`✅ โหลดรายชื่อสำเร็จทั้ง ${successCount} ชั้น`);
 
     _renderClubMain();
   } catch(e) { Utils.toast(e.message, 'error'); }
@@ -113,6 +95,7 @@ function switchClubClassTab(cls) {
   _renderClubStudentPicker();
 }
 
+// ── render หน้าหลัก ──────────────────────────────────
 function _renderClubMain() {
   const wrap = $('clubContainer'); if (!wrap) return;
   const t = Club.term;
@@ -160,9 +143,7 @@ function _renderClubMain() {
         </button>
       </div>
       <div id="clubStudentPicker">
-        ${!Club.loaded
-          ? `<div style="font-size:13px;color:#9ca3af;padding:6px 0;">กดโหลดรายชื่อเพื่อเลือกนักเรียน</div>`
-          : ''}
+        ${!Club.loaded ? `<div style="font-size:13px;color:#9ca3af;padding:6px 0;">กดโหลดรายชื่อเพื่อเลือกนักเรียน</div>` : ''}
       </div>
 
       <hr style="border-color:#fde68a;margin:12px 0;">
@@ -189,37 +170,29 @@ function _renderClubMain() {
       </div>
     </div>
 
+    ${memberCount > 0 ? `
     <div class="card mb-3" style="background:#fff;border:1px solid #fde68a;">
-      <div style="font-size:.88rem;font-weight:700;color:#92400e;margin-bottom:10px;">📋 บันทึกการเข้าร่วม</div>
-      <div id="clubAttContainer">
-        <div style="font-size:13px;color:#9ca3af;padding:4px 0;">
-          ${memberCount ? 'กดโหลดข้อมูลเพื่อแสดงตาราง' : 'ยังไม่มีสมาชิกชุมนุม'}
-        </div>
-      </div>
-      ${memberCount ? `
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;flex-wrap:wrap;gap:8px;">
-          <div style="font-size:.78rem;color:#6b7280;">* เกณฑ์: เวลาเรียน ≥ 80% = "ผ่าน"</div>
-          <button class="btn-pri" onclick="loadClubAttendance()" style="background:linear-gradient(135deg,#d97706,#b45309);">
-            🔄 โหลดข้อมูลการเข้าร่วม
-          </button>
-        </div>
-        <button class="btn-save mt-3 w-100" onclick="saveClubData()"
+      <div style="font-size:.88rem;font-weight:700;color:#92400e;margin-bottom:12px;">📋 บันทึกกิจกรรมชุมนุม ภาคเรียนที่ ${t}</div>
+      <div id="clubActivitySection"></div>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+        <button class="btn-save w-100" onclick="saveClubData()"
           style="background:linear-gradient(135deg,#d97706,#b45309);">
           💾 บันทึกชุมนุม ภาคเรียน ${t}
-        </button>` : ''}
-    </div>
+        </button>
+      </div>
+    </div>` : ''}
   `;
 
   if (Club.loaded) _renderClubStudentPicker();
+  if (memberCount > 0) _renderClubActivity();
 }
 
-// ── แสดง tab ทุกชั้น + ชิปนักเรียนของชั้นที่เลือก ──
+// ── tab เลือกนักเรียน ────────────────────────────────
 function _renderClubStudentPicker() {
   const wrap = $('clubStudentPicker'); if (!wrap) return;
   const classes   = [...new Set(CONFIG.ALL_CLS.map(c => c.replace(/ เทอม [12]/g, '').trim()))];
   const activeCls = Club.activeClassTab || classes[0];
 
-  // ── tabs ──
   const tabsHtml = classes.map(cls => {
     const selected = Club.members.filter(m => m.classroom === cls).length;
     const hasError = !!Club.loadErrors[cls];
@@ -227,8 +200,7 @@ function _renderClubStudentPicker() {
     const border   = on ? '#d97706' : hasError ? '#fca5a5' : '#e5e7eb';
     const bg       = on ? '#fef3c7' : hasError ? '#fff1f2' : '#fff';
     const color    = on ? '#92400e' : hasError ? '#b91c1c' : '#6b7280';
-    return `<button type="button"
-      onclick="switchClubClassTab('${cls}')"
+    return `<button type="button" onclick="switchClubClassTab('${cls}')"
       title="${hasError ? Club.loadErrors[cls] : ''}"
       style="padding:4px 12px;border-radius:20px;white-space:nowrap;cursor:pointer;font-size:12px;
              border:1px solid ${border};background:${bg};color:${color};">
@@ -238,66 +210,295 @@ function _renderClubStudentPicker() {
     </button>`;
   }).join('');
 
-  // ── ชิปนักเรียนของ tab ที่เลือก ──
   const students = Club.allClassStudents[activeCls] || [];
   const errorMsg = Club.loadErrors[activeCls];
 
   let chipsHtml;
   if (errorMsg) {
-    chipsHtml = `<div style="font-size:12px;color:#b91c1c;padding:8px;background:#fff1f2;
-      border-radius:6px;border:1px solid #fecaca;">
+    chipsHtml = `<div style="font-size:12px;color:#b91c1c;padding:8px;background:#fff1f2;border-radius:6px;border:1px solid #fecaca;">
       ⚠️ โหลดรายชื่อชั้น ${activeCls} ไม่สำเร็จ<br>
-      <span style="color:#6b7280;font-size:11px;">${errorMsg}</span>
-    </div>`;
+      <span style="color:#6b7280;font-size:11px;">${errorMsg}</span></div>`;
   } else if (students.length === 0) {
     chipsHtml = `<div style="font-size:12px;color:#9ca3af;padding:6px 0;">ไม่พบรายชื่อ</div>`;
   } else {
     chipsHtml = `<div style="display:flex;flex-wrap:wrap;gap:6px;padding:6px 0;">` +
       students.map(s => {
         const inMyClub = Club.members.some(m => m.studentId === s.studentId);
-        // inOtherClub = ถูก mark ว่าอยู่ชุมนุมแล้ว แต่ไม่ใช่ชุมนุมนี้
         const inOther  = s.inOtherClub && !inMyClub;
         const bg     = inMyClub ? '#d1fae5' : inOther ? '#f3f4f6' : '#fff';
         const border = inMyClub ? '#6ee7b7' : inOther ? '#e5e7eb' : '#d1d5db';
         const color  = inMyClub ? '#065f46' : inOther ? '#9ca3af' : '#374151';
-        const check  = inMyClub ? '✓ ' : '';
-        const tag    = inOther ? ` <span style="font-size:10px;color:#9ca3af;">(${s.clubName})</span>` : '';
         const click  = inOther ? '' : `toggleClubMember('${s.studentId}','${s.name.replace(/'/g,"\\'")}','${activeCls}')`;
-        return `<div
-          onclick="${click}"
-          style="display:inline-flex;align-items:center;gap:3px;padding:4px 10px;
-            border-radius:20px;border:1px solid ${border};background:${bg};
-            font-size:12px;color:${color};
-            cursor:${inOther?'not-allowed':'pointer'};user-select:none;
-            ${inOther?'opacity:.6;':''}">
-          ${check}${s.name}${tag}
+        return `<div onclick="${click}" style="display:inline-flex;align-items:center;gap:3px;padding:4px 10px;
+          border-radius:20px;border:1px solid ${border};background:${bg};font-size:12px;color:${color};
+          cursor:${inOther?'not-allowed':'pointer'};user-select:none;${inOther?'opacity:.6;':''}">
+          ${inMyClub?'✓ ':''}${s.name}${inOther?` <span style="font-size:10px;color:#9ca3af;">(${s.clubName})</span>`:''}
         </div>`;
       }).join('') + `</div>`;
   }
 
   wrap.innerHTML = `
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">${tabsHtml}</div>
-    <div style="max-height:220px;overflow-y:auto;">${chipsHtml}</div>
-  `;
+    <div style="max-height:220px;overflow-y:auto;">${chipsHtml}</div>`;
 }
 
 function toggleClubMember(sid, name, classroom) {
   const idx = Club.members.findIndex(m => m.studentId === sid);
   if (idx >= 0) {
     Club.members.splice(idx, 1);
-    // คืนสถานะ inOtherClub ให้ถูกต้อง (ดูจากข้อมูลที่โหลดมา)
-    const orig = (Club.allClassStudents[classroom] || []).find(s => s.studentId === sid);
-    if (orig) orig.inOtherClub = false;
+    delete Club.attMap[sid];
+    delete Club.resultMap[sid];
   } else {
     Club.members.push({ studentId: sid, name, classroom });
-    // ถ้าเพิ่งเลือก ให้ mark inOtherClub = false เพื่อให้แสดงติ๊กถูก
-    const orig = (Club.allClassStudents[classroom] || []).find(s => s.studentId === sid);
-    if (orig) orig.inOtherClub = false;
   }
   _renderClubMain();
   if (Club.loaded) _renderClubStudentPicker();
 }
 
+// ── ส่วนบันทึกกิจกรรม (เหมือน guidance) ─────────────
+function _renderClubActivity() {
+  const wrap = $('clubActivitySection'); if (!wrap) return;
+  const topics   = Club.topics;
+  const nTopics  = topics.length;
+  const members  = Club.members;
+
+  // ── ส่วน 1: ตารางบันทึกหัวข้อกิจกรรม ──
+  const actRows = topics.map((tp, i) =>
+    `<tr>
+      <td style="text-align:center;border:1px solid #fde68a;padding:5px;color:#92400e;font-size:.8rem;">${i+1}</td>
+      <td style="border:1px solid #fde68a;padding:2px 4px;">
+        <input type="text" class="club-topic" data-idx="${i}" value="${tp}"
+          placeholder="หัวข้อกิจกรรม/ครั้งที่ ${i+1}..."
+          oninput="Club.topics[${i}]=this.value"
+          style="width:100%;border:none;background:transparent;font-family:inherit;font-size:.84rem;padding:4px 6px;outline:none;">
+      </td>
+    </tr>`
+  ).join('');
+
+  // ── ส่วน 2: header วันที่/ครั้งที่ ──
+  const colHeaders = topics.map((tp, i) =>
+    `<th style="width:26px;vertical-align:bottom;padding-bottom:4px;border:1px solid #fde68a;background:#fefce8;">
+      <div style="writing-mode:vertical-rl;transform:rotate(180deg);font-size:10px;font-weight:600;color:#92400e;white-space:nowrap;height:60px;">
+        ${i+1}. ${tp.slice(0,8)||'ครั้งที่'+(i+1)}
+      </div>
+    </th>`
+  ).join('');
+
+  // ── ส่วน 2: แถวนักเรียน ──
+  const attRows = members.map((m, idx) => {
+    const att = Club.attMap[m.studentId] || Array(nTopics).fill('ป');
+    while (att.length < nTopics) att.push('ป');
+    Club.attMap[m.studentId] = att;
+
+    const nP    = att.filter(v => v === 'ป').length;
+    const nBase = att.filter(v => v !== '-').length;
+    const result = Club.resultMap[m.studentId] ||
+      (nBase > 0 && nP >= Math.ceil(nBase * 0.8) ? 'ผ่าน' : 'ไม่ผ่าน');
+
+    const cells = att.slice(0, nTopics).map((v, i) => {
+      const st = v === 'ข'
+        ? { bg:'#fee2e2', cl:'#dc2626', lb:'ข' }
+        : v === 'ล'
+          ? { bg:'#fef3c7', cl:'#b45309', lb:'ล' }
+          : { bg:'#f0fdf4', cl:'#166534', lb:'✓' };
+      return `<td class="club-day-cell" data-sid="${m.studentId}" data-idx="${i}" data-flag="${v}"
+        onclick="cycleClubDay(this)"
+        style="width:26px;text-align:center;cursor:pointer;border:1px solid #fde68a;padding:3px 0;
+               font-size:12px;font-weight:700;background:${st.bg};color:${st.cl};user-select:none;">
+        ${st.lb}
+      </td>`;
+    }).join('');
+
+    const rBg = result==='ผ่าน'?'#dcfce7':'#fee2e2';
+    const rCl = result==='ผ่าน'?'#16a34a':'#dc2626';
+    const rBd = result==='ผ่าน'?'#86efac':'#fca5a5';
+
+    return `<tr data-sid="${m.studentId}">
+      <td style="text-align:center;border:1px solid #fde68a;padding:4px;font-size:.78rem;color:#9ca3af;
+                 position:sticky;left:0;background:#fff;min-width:28px;">${idx+1}</td>
+      <td style="border:1px solid #fde68a;padding:5px 8px;font-weight:600;font-size:.82rem;white-space:nowrap;
+                 position:sticky;left:28px;background:#fff;min-width:150px;border-right:2px solid #fde68a;">${m.name}
+        <span style="font-size:10px;color:#9ca3af;font-weight:400;"> ${m.classroom}</span>
+      </td>
+      ${cells}
+      <td class="club-total-val" style="text-align:center;font-weight:700;color:#0369a1;background:#eff6ff;
+                                        border:1px solid #fde68a;padding:4px 6px;min-width:44px;">${nP}/${nBase}</td>
+      <td style="text-align:center;border:1px solid #fde68a;padding:3px 4px;">
+        <select class="club-result"
+          style="width:84px;padding:3px;font-size:.76rem;font-weight:700;font-family:inherit;
+                 background:${rBg};color:${rCl};border:1.5px solid ${rBd};border-radius:6px;"
+          onchange="Club.resultMap['${m.studentId}']=this.value;
+                    this.style.background=this.value==='ผ่าน'?'#dcfce7':'#fee2e2';
+                    this.style.color=this.value==='ผ่าน'?'#16a34a':'#dc2626';
+                    this.style.borderColor=this.value==='ผ่าน'?'#86efac':'#fca5a5';">
+          <option value="ผ่าน" ${result==='ผ่าน'?'selected':''}>ผ่าน</option>
+          <option value="ไม่ผ่าน" ${result!=='ผ่าน'?'selected':''}>ไม่ผ่าน</option>
+        </select>
+      </td>
+    </tr>`;
+  }).join('');
+
+  wrap.innerHTML = `
+    ${nTopics > 0 ? `
+    <div style="margin-bottom:14px;">
+      <div style="font-weight:700;font-size:.86rem;color:#92400e;padding:8px 12px;
+                  background:#fef3c7;border-radius:8px 8px 0 0;border:1px solid #fde68a;border-bottom:none;">
+        📝 บันทึกหัวข้อกิจกรรม (${nTopics} ครั้ง)
+      </div>
+      <div style="border:1px solid #fde68a;border-radius:0 0 8px 8px;overflow:auto;max-height:200px;">
+        <table style="width:100%;border-collapse:collapse;font-size:.84rem;">
+          <thead style="position:sticky;top:0;background:#fefce8;">
+            <tr>
+              <th style="width:50px;border:1px solid #fde68a;padding:6px;">ครั้งที่</th>
+              <th style="border:1px solid #fde68a;padding:6px;text-align:left;">หัวข้อกิจกรรม</th>
+            </tr>
+          </thead>
+          <tbody>${actRows}</tbody>
+        </table>
+      </div>
+    </div>` : ''}
+
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">
+      <input type="text" id="clubTopicInp" class="cfg-n"
+        style="flex:1;text-align:left;min-width:160px;" placeholder="หัวข้อกิจกรรม/ครั้งที่ ${nTopics+1}...">
+      <button class="btn-sm" onclick="addClubTopic()" style="white-space:nowrap;">+ เพิ่มครั้ง</button>
+      ${nTopics > 0 ? `<button class="btn-sm" style="color:#ef4444;border-color:#fecaca;" onclick="removeLastClubTopic()">ลบล่าสุด</button>` : ''}
+    </div>
+
+    ${members.length > 0 && nTopics > 0 ? `
+    <div>
+      <div style="font-weight:700;font-size:.86rem;color:#0369a1;padding:8px 12px;
+                  background:#eff6ff;border-radius:8px 8px 0 0;border:1px solid #bae6fd;border-bottom:none;">
+        ✅ ตารางการเข้าร่วม
+        <span style="font-size:.72rem;font-weight:400;color:#64748b;margin-left:8px;">(คลิก: ✓มา → ขขาด → ลลา)</span>
+      </div>
+      <div style="border:1px solid #bae6fd;border-radius:0 0 8px 8px;overflow:auto;max-height:55vh;">
+        <table style="border-collapse:collapse;font-size:.82rem;width:max-content;min-width:100%;">
+          <thead style="position:sticky;top:0;z-index:20;background:#f0f9ff;">
+            <tr>
+              <th rowspan="2" style="width:28px;position:sticky;left:0;z-index:30;background:#f0f9ff;border:1px solid #fde68a;">ที่</th>
+              <th rowspan="2" style="min-width:150px;text-align:left;padding-left:8px;position:sticky;left:28px;z-index:30;background:#f0f9ff;border:1px solid #fde68a;border-right:2px solid #fde68a;">ชื่อ-นามสกุล</th>
+              <th colspan="${nTopics}" style="border:1px solid #fde68a;background:#fef3c7;font-size:.8rem;">ครั้งที่เข้าร่วม</th>
+              <th rowspan="2" style="width:50px;border:1px solid #fde68a;background:#eff6ff;font-size:.76rem;">มา/รวม</th>
+              <th rowspan="2" style="width:86px;border:1px solid #fde68a;background:#f0fdf4;font-size:.76rem;">ผลประเมิน</th>
+            </tr>
+            <tr style="height:70px;">${colHeaders}</tr>
+          </thead>
+          <tbody id="clubAttBody">${attRows}</tbody>
+        </table>
+      </div>
+    </div>` : members.length > 0 ? `<div style="font-size:13px;color:#9ca3af;padding:8px 0;">กด "+ เพิ่มครั้ง" เพื่อเริ่มบันทึกกิจกรรม</div>` : ''}
+  `;
+}
+
+// ── toggle มา/ขาด/ลา ────────────────────────────────
+function cycleClubDay(cell) {
+  const CY = { 'ป':'ข', 'ข':'ล', 'ล':'ป', '':'ป' };
+  const ST = {
+    'ป': { bg:'#f0fdf4', cl:'#166534', lb:'✓' },
+    'ข': { bg:'#fee2e2', cl:'#dc2626', lb:'ข' },
+    'ล': { bg:'#fef3c7', cl:'#b45309', lb:'ล' }
+  };
+  const cur  = cell.getAttribute('data-flag') || 'ป';
+  const next = CY[cur] || 'ป';
+  const st   = ST[next];
+  const sid  = cell.getAttribute('data-sid');
+  const idx  = parseInt(cell.getAttribute('data-idx'));
+
+  cell.setAttribute('data-flag', next);
+  cell.style.background = st.bg;
+  cell.style.color      = st.cl;
+  cell.textContent      = st.lb;
+
+  // อัปเดต attMap
+  if (!Club.attMap[sid]) Club.attMap[sid] = Array(Club.topics.length).fill('ป');
+  Club.attMap[sid][idx] = next;
+
+  // อัปเดต มา/รวม และผล
+  const tr = cell.closest('tr');
+  const allCells = tr.querySelectorAll('.club-day-cell');
+  let nP = 0, nBase = 0;
+  allCells.forEach(c => {
+    const f = c.getAttribute('data-flag') || 'ป';
+    if (f !== '-') nBase++;
+    if (f === 'ป') nP++;
+  });
+  const totEl = tr.querySelector('.club-total-val');
+  if (totEl) totEl.textContent = `${nP}/${nBase}`;
+  const sel = tr.querySelector('.club-result');
+  if (sel && nBase > 0) {
+    const pass = nP >= Math.ceil(nBase * 0.8) ? 'ผ่าน' : 'ไม่ผ่าน';
+    sel.value             = pass;
+    sel.style.background  = pass==='ผ่าน' ? '#dcfce7' : '#fee2e2';
+    sel.style.color       = pass==='ผ่าน' ? '#16a34a' : '#dc2626';
+    sel.style.borderColor = pass==='ผ่าน' ? '#86efac' : '#fca5a5';
+    Club.resultMap[sid] = pass;
+  }
+}
+
+// ── จัดการหัวข้อ ─────────────────────────────────────
+function addClubTopic() {
+  const inp = $('clubTopicInp');
+  const val = inp?.value?.trim() || `ครั้งที่ ${Club.topics.length + 1}`;
+  Club.topics.push(val);
+  if (inp) inp.value = '';
+  // ขยาย attMap ของทุกสมาชิก
+  Club.members.forEach(m => {
+    if (!Club.attMap[m.studentId]) Club.attMap[m.studentId] = [];
+    Club.attMap[m.studentId].push('ป');
+  });
+  _renderClubActivity();
+}
+
+function removeLastClubTopic() {
+  if (!Club.topics.length) return;
+  Club.topics.pop();
+  Club.members.forEach(m => {
+    if (Club.attMap[m.studentId]) Club.attMap[m.studentId].pop();
+  });
+  _renderClubActivity();
+}
+
+// ── บันทึก ───────────────────────────────────────────
+async function saveClubData() {
+  if (!Club.clubName.trim()) return Utils.toast('กรอกชื่อชุมนุมก่อน', 'error');
+  if (!Club.members.length)  return Utils.toast('ยังไม่มีสมาชิก', 'error');
+
+  // sync ผลจากหน้าจอ
+  document.querySelectorAll('#clubAttBody tr[data-sid]').forEach(tr => {
+    const sid  = tr.getAttribute('data-sid');
+    const att  = [...tr.querySelectorAll('.club-day-cell')].map(c => c.getAttribute('data-flag') || 'ป');
+    const res  = tr.querySelector('.club-result')?.value || 'ไม่ผ่าน';
+    Club.attMap[sid]    = att;
+    Club.resultMap[sid] = res;
+  });
+
+  const year    = $('gYear').value;
+  const records = Club.members.map(m => ({
+    studentId: m.studentId,
+    classroom: m.classroom,
+    attended:  (Club.attMap[m.studentId] || []).filter(v => v === 'ป').length,
+    result:    Club.resultMap[m.studentId] || 'ไม่ผ่าน',
+    attArray:  Club.attMap[m.studentId]    || []
+  }));
+
+  Utils.showLoading('บันทึกชุมนุม...');
+  try {
+    const res = await api('saveClub', {
+      year,
+      term:      Club.term,
+      clubName:  Club.clubName,
+      teacher:   Club.teacher,
+      dayOfWeek: Club.dayOfWeek,
+      topics:    Club.topics,
+      records
+    });
+    Utils.toast('✅ ' + res);
+  } catch(e) { Utils.toast(e.message, 'error'); }
+  Utils.hideLoading();
+}
+
+// ── โหลดข้อมูลที่บันทึกไว้ ──────────────────────────
 async function loadClubAttendance() {
   if (!Club.members.length) return Utils.toast('ยังไม่มีสมาชิก', 'error');
   const year = $('gYear').value;
@@ -308,122 +509,25 @@ async function loadClubAttendance() {
       members: Club.members.map(m => ({ studentId: m.studentId, classroom: m.classroom })),
       term: Club.term
     });
-    Club.attendanceMap = res.attendanceMap || {};
+    const aMap = res.attendanceMap || {};
     if (res.topics && res.topics.length) Club.topics = res.topics;
     if (res.teacher)   Club.teacher   = res.teacher;
     if (res.dayOfWeek) Club.dayOfWeek = res.dayOfWeek;
     if (res.clubName)  Club.clubName  = res.clubName;
-    _renderClubAttTable();
+    Club.members.forEach(m => {
+      const d = aMap[m.studentId];
+      if (d) {
+        Club.attMap[m.studentId]    = d.attArray || [];
+        Club.resultMap[m.studentId] = d.result   || 'ไม่ผ่าน';
+      }
+    });
     _renderClubMain();
+    Utils.toast('✅ โหลดข้อมูลสำเร็จ');
   } catch(e) { Utils.toast(e.message, 'error'); }
   Utils.hideLoading();
 }
 
-function _renderClubAttTable() {
-  const wrap = $('clubAttContainer'); if (!wrap) return;
-  const topics     = Club.topics;
-  const topicCount = topics.length;
-  const topicHeaders = topics.map((tp, i) =>
-    `<th style="font-size:.72rem;writing-mode:vertical-rl;transform:rotate(180deg);
-      max-height:120px;white-space:nowrap;padding:6px 3px;background:#fef3c7;color:#92400e;">
-      ${i+1}. ${tp}</th>`
-  ).join('');
-
-  const rows = Club.members.map((m, idx) => {
-    const d        = Club.attendanceMap[m.studentId] || {};
-    const attArray = Array.isArray(d.attArray) ? d.attArray : Array(topicCount).fill('');
-    const attended = Number(d.attended) || attArray.filter(v => v === 'เข้า').length;
-    const result   = d.result || (topicCount > 0 && attended/topicCount >= 0.8 ? 'ผ่าน' : 'ไม่ผ่าน');
-    const cells    = Array(topicCount).fill(0).map((_, i) => {
-      const checked = attArray[i] === 'เข้า';
-      return `<td style="text-align:center;"><input type="checkbox" ${checked?'checked':''}
-        style="width:16px;height:16px;cursor:pointer;accent-color:#d97706;"
-        onchange="updateClubAtt('${m.studentId}',${i},this.checked)"></td>`;
-    }).join('');
-    const badge = result === 'ผ่าน'
-      ? `<span style="background:#dcfce7;color:#166534;padding:2px 8px;border-radius:20px;font-size:.76rem;font-weight:700;">ผ่าน</span>`
-      : `<span style="background:#fee2e2;color:#991b1b;padding:2px 8px;border-radius:20px;font-size:.76rem;font-weight:700;">ไม่ผ่าน</span>`;
-    return `<tr>
-      <td style="text-align:center;color:#6b7280;font-size:.76rem;">${idx+1}</td>
-      <td style="font-weight:600;font-size:.82rem;min-width:120px;">${m.name}</td>
-      <td style="font-size:.74rem;color:#6b7280;">${m.classroom}</td>
-      ${cells}
-      <td style="text-align:center;"><input type="number" min="0" max="${topicCount}" value="${attended}"
-        style="width:44px;text-align:center;border:1px solid #fde68a;border-radius:6px;padding:3px;font-size:.8rem;"
-        onchange="updateClubAttCount('${m.studentId}',this.value)"></td>
-      <td style="text-align:center;">${badge}</td>
-    </tr>`;
-  }).join('');
-
-  wrap.innerHTML = `
-    <div style="overflow-x:auto;border:1px solid #fde68a;border-radius:8px;margin-bottom:8px;">
-      <table style="width:100%;border-collapse:collapse;font-size:.82rem;min-width:400px;">
-        <thead><tr style="background:#fef3c7;">
-          <th style="padding:6px;width:28px;font-size:.74rem;">ที่</th>
-          <th style="padding:6px;text-align:left;font-size:.74rem;">ชื่อ-นามสกุล</th>
-          <th style="padding:6px;text-align:left;font-size:.74rem;">ชั้น</th>
-          ${topicHeaders}
-          <th style="padding:6px;width:50px;font-size:.74rem;text-align:center;">เข้าร่วม</th>
-          <th style="padding:6px;width:70px;font-size:.74rem;text-align:center;">ผล</th>
-        </tr></thead>
-        <tbody>${rows || '<tr><td colspan="10" style="text-align:center;color:#9ca3af;padding:12px;">ยังไม่มีสมาชิก</td></tr>'}</tbody>
-      </table>
-    </div>
-    <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap;">
-      <input type="text" id="clubTopicInp" class="cfg-n" style="flex:1;text-align:left;min-width:140px;" placeholder="เพิ่มหัวข้อ/ครั้งที่...">
-      <button class="btn-sm" onclick="addClubTopic()" style="white-space:nowrap;">+ เพิ่มหัวข้อ</button>
-      ${topicCount > 0 ? `<button class="btn-sm" style="color:#ef4444;border-color:#fecaca;" onclick="removeLastClubTopic()">ลบล่าสุด</button>` : ''}
-    </div>`;
-}
-
-function updateClubAtt(sid, idx, checked) {
-  if (!Club.attendanceMap[sid]) Club.attendanceMap[sid] = { attArray: [], attended: 0, result: 'ไม่ผ่าน' };
-  const d = Club.attendanceMap[sid];
-  while (d.attArray.length <= idx) d.attArray.push('');
-  d.attArray[idx] = checked ? 'เข้า' : '';
-  d.attended = d.attArray.filter(v => v === 'เข้า').length;
-  d.result = Club.topics.length > 0 && d.attended/Club.topics.length >= 0.8 ? 'ผ่าน' : 'ไม่ผ่าน';
-  _renderClubAttTable();
-}
-
-function updateClubAttCount(sid, val) {
-  if (!Club.attendanceMap[sid]) Club.attendanceMap[sid] = { attArray: [], attended: 0, result: 'ไม่ผ่าน' };
-  const count = Number(val) || 0;
-  Club.attendanceMap[sid].attended = count;
-  Club.attendanceMap[sid].result = Club.topics.length > 0 && count/Club.topics.length >= 0.8 ? 'ผ่าน' : 'ไม่ผ่าน';
-  _renderClubAttTable();
-}
-
-function addClubTopic() {
-  const inp = $('clubTopicInp');
-  const val = inp?.value?.trim();
-  if (!val) return Utils.toast('กรอกชื่อหัวข้อก่อน', 'error');
-  Club.topics.push(val);
-  if (inp) inp.value = '';
-  _renderClubAttTable();
-}
-
-function removeLastClubTopic() {
-  Club.topics.pop();
-  _renderClubAttTable();
-}
-
-async function saveClubData() {
-  if (!Club.clubName.trim()) return Utils.toast('กรอกชื่อชุมนุมก่อน', 'error');
-  if (!Club.members.length)  return Utils.toast('ยังไม่มีสมาชิก', 'error');
-  const year = $('gYear').value;
-  const records = Club.members.map(m => {
-    const d = Club.attendanceMap[m.studentId] || {};
-    return { studentId: m.studentId, classroom: m.classroom, attended: d.attended||0, result: d.result||'ไม่ผ่าน', attArray: d.attArray||[] };
-  });
-  Utils.showLoading('บันทึกชุมนุม...');
-  try {
-    const res = await api('saveClub', { year, term: Club.term, clubName: Club.clubName, teacher: Club.teacher, dayOfWeek: Club.dayOfWeek, topics: Club.topics, records });
-    Utils.toast('✅ ' + res);
-  } catch(e) { Utils.toast(e.message, 'error'); }
-  Utils.hideLoading();
-}
-
+// ── ดูชุมนุมของชั้น (ครูประจำชั้น) ─────────────────
 async function loadHomeroomClubView() {
   const year = $('gYear').value, cls = $('gClass').value;
   const term = $('homeroomClubTerm')?.value || '1';
