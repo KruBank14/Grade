@@ -38,18 +38,38 @@ async function loadAllClubStudents() {
   const year = $('gYear').value;
   if (!year) { Utils.toast('กรุณาเลือกปีการศึกษาก่อน', 'error'); return; }
 
+  // ใช้ App.subs (โหลดตอน login แล้ว) เพื่อรู้ว่าแต่ละชั้นมีวิชาอะไร
+  // แล้วยิง getGrades โดยเลือกวิชาแรกของชั้นนั้น → ได้ students[] กลับมา
+  // วิธีนี้ใช้ action "getGrades" ที่มีอยู่แล้วใน GAS ไม่ต้อง Deploy ใหม่
+  if (!App.subs || !Object.keys(App.subs).length) {
+    Utils.toast('ไม่พบข้อมูลรายวิชา กรุณา Login ใหม่', 'error');
+    return;
+  }
+
   const t       = Club.term;
-  const classes = CONFIG.ALL_CLS.filter(c => !c.includes('เทอม')); // ป.1–ป.6, ม.1–ม.3
+  const classes = CONFIG.ALL_CLS.filter(c => !c.includes('เทอม'));
 
   Utils.showLoading('โหลดรายชื่อทุกชั้น...');
   try {
-    // ยิง getClubsByClassroom ทุกชั้นพร้อมกัน
     const results = await Promise.all(
-      classes.map(cls =>
-        api('getClubsByClassroom', { year, classroom: cls, term: t })
-          .then(res => ({ cls, students: res.students || [], error: null }))
-          .catch(e  => ({ cls, students: [],               error: e.message || 'โหลดไม่สำเร็จ' }))
-      )
+      classes.map(async cls => {
+        const subs = App.subs[cls] || [];
+        if (!subs.length) return { cls, students: [], error: null }; // ชั้นที่ไม่มีวิชา → ข้าม
+
+        // ยิง getGrades วิชาแรกของชั้นนั้น → ได้ students[]
+        try {
+          const res = await api('getGrades', { year, classroom: cls, subject: subs[0] });
+          const students = (res.students || []).map(s => ({
+            studentId:   s.studentId,
+            name:        s.name,
+            inOtherClub: false,   // ยังไม่รู้ — จะอัปเดตทีหลังตอน saveClub
+            clubName:    ''
+          }));
+          return { cls, students, error: null };
+        } catch(e) {
+          return { cls, students: [], error: e.message || 'โหลดไม่สำเร็จ' };
+        }
+      })
     );
 
     Club.allClassStudents = {};
@@ -60,20 +80,13 @@ async function loadAllClubStudents() {
         Club.loadErrors[cls] = error;
         Club.allClassStudents[cls] = [];
       } else {
-        // แปลง students → format เดียวกับที่ _renderClubStudentPicker ใช้
-        Club.allClassStudents[cls] = students.map(s => ({
-          studentId:   s.studentId,
-          name:        s.name,
-          inOtherClub: !!s.clubName,   // มีชุมนุมแล้ว = อยู่ชุมนุมอื่น
-          clubName:    s.clubName || ''
-        }));
+        Club.allClassStudents[cls] = students;
       }
     });
 
     const successCount = results.filter(r => !r.error && r.students.length > 0).length;
     const failCount    = results.filter(r => !!r.error).length;
 
-    // เลือก tab ชั้นแรกที่มีข้อมูล
     const firstCls = classes.find(c => (Club.allClassStudents[c] || []).length > 0) || classes[0];
     Club.activeClassTab = firstCls;
     Club.loaded = true;
@@ -414,7 +427,7 @@ async function loadHomeroomClubView() {
   if (!cls) { wrap.innerHTML = `<div style="color:#9ca3af;font-size:13px;">กรุณาเลือกชั้นเรียนก่อน</div>`; return; }
   Utils.showLoading('โหลดข้อมูลชุมนุม...');
   try {
-    const res      = await api('getClubsByClassroom', { year, classroom: cls, term });
+    const res      = await api('getClubsByClassroom', { year, classroom: cls, term }).catch(() => ({ students: [] }));
     const students = res.students || [];
     const noClub   = students.filter(s => !s.clubName).length;
     const rows     = students.map((s,i) => {
@@ -458,7 +471,7 @@ async function printClubReport(term) {
   if (!cls) return Utils.toast('กรุณาเลือกชั้นก่อน', 'error');
   Utils.showLoading('สร้างรายงาน...');
   try {
-    const res     = await api('getClubsByClassroom', { year, classroom: cls, term });
+    const res     = await api('getClubsByClassroom', { year, classroom: cls, term }).catch(() => ({ students: [] }));
     const profile = App.schoolProfile || {};
     const rows    = (res.students||[]).map((s,i) =>
       `<tr><td style="text-align:center;">${i+1}</td><td>${s.name}</td>
