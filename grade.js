@@ -79,8 +79,6 @@ function updateAutoScoreDisplay() {
 }
 
 function refreshUnitPanelLabels() {
-  if ($('sum_t1_units')?.parentElement) $('sum_t1_units').parentElement.innerHTML = `<span>คะแนนรวมทุกหน่วย เทอม 1:</span><strong id="sum_t1_units">${ScoreLogic.getUnitsMax(1)}</strong><span>/</span><span class="res">${App.isSemMode ? '100' : '50'}</span>`;
-  if ($('sum_t2_units')?.parentElement) $('sum_t2_units').parentElement.innerHTML = `<span>คะแนนรวมทุกหน่วย เทอม 2:</span><strong id="sum_t2_units">${ScoreLogic.getUnitsMax(2)}</strong><span>/</span><span class="res">50</span>`;
   if ($('t2AutoBlock')) $('t2AutoBlock').style.display = App.isSemMode ? 'none' : 'block';
   if ($('tabTerm2Btn')) $('tabTerm2Btn').style.display = App.isSemMode ? 'none' : 'block';
   updateAutoScoreDisplay();
