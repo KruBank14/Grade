@@ -60,10 +60,19 @@ function normalizeExam(t) {
 }
 
 function updateAutoScoreDisplay() {
+  const QUOTA = App.isSemMode ? 100 : 50;
   const setScoreTxt = (t) => {
-    const k = ScoreLogic.getUnitsMax(t), e = ScoreLogic.getExamMax(t);
+    const k = ScoreLogic.getUnitsMax(t);
+    const e = App.exam?.[t]?.score ?? Math.max(0, QUOTA - k);
     if ($(`show_t${t}_keep`)) $(`show_t${t}_keep`).textContent = k;
     if ($(`show_t${t}_exam`)) $(`show_t${t}_exam`).textContent = e;
+    if ($(`show_t${t}_total`)) {
+      const total = k + e;
+      const el = $(`show_t${t}_total`);
+      el.textContent = total;
+      el.style.color = total === QUOTA ? '#16a34a' : '#d97706';
+      el.style.fontWeight = '600';
+    }
     if ($(`sum_t${t}_units`)) $(`sum_t${t}_units`).textContent = k;
   };
   setScoreTxt(1); if (!App.isSemMode) setScoreTxt(2);
