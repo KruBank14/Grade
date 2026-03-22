@@ -784,6 +784,7 @@ function buildBody() {
         <td style="background:#f8fafc;"><span class="gbadge ${fs===0?'nil':fs<tgt*0.5?'fail':'ok'} final-grade" style="font-size:1.05rem;border:2px solid #c7d2fe;min-width:48px;">${fs===0?'-':Utils.calcGradeFrontend(fs)}</span></td>
       ` : ''}
     </tr>`;
+  }).join('');
   refreshAllScoreInputStates($('gtBody'));
 }
 
@@ -1055,6 +1056,7 @@ async function saveGrades() {
       : { studentId: sid, t1_sub: oSub, t1_acc: oAcc, t1_exam: oExam, t1_exam_sub: oExamSub,
           t2_sub: subVals, t2_acc: acc, t2_exam: examVal, t2_exam_sub: examSubVals }
     );
+  }); // end forEach tr
 
   if (!records.length) return Utils.toast('ยังไม่มีข้อมูล', 'warning');
 
