@@ -810,11 +810,13 @@ function buildBody() {
           examFlatIdx++;
         });
         const scaled = ScoreLogic.calcScaled(raw, ScoreLogic.getExamRawMax(t,ei), Number(eu.max)||0);
+        const _hasAnyExam = items.some((_, ii) => { const v = examFlat[examFlatIdx - items.length + ii]; return v !== '' && v !== undefined && v !== null; });
         examScaledTotal += scaled;
-        cells += `<td class="td-sc${t} sc${t} exam-unit-total-${t}" data-examidx="${ei}">${scaled||'-'}</td>`;
+        cells += `<td class="td-sc${t} sc${t} exam-unit-total-${t}" data-examidx="${ei}">${_hasAnyExam ? scaled : '-'}</td>`;
       });
       if (!examUnits.length) cells += `<td style="color:#94a3b8;font-size:.78rem;padding:6px 10px;">ยังไม่มีรายการสอบ</td>`;
-      cells += `<td><span class="tbadge ${examScaledTotal===0?'nil':'ok'} t${t}e-tot">${Math.round(examScaledTotal*100)/100||'-'}</span></td>`;
+      const _examHasAny = (s.grades?.[`t${t}_exam_sub`]||[]).some(v => v !== '' && v !== undefined && v !== null);
+      cells += `<td><span class="tbadge ${examScaledTotal===0?'nil':'ok'} t${t}e-tot">${_examHasAny ? Math.round(examScaledTotal*100)/100 : '-'}</span></td>`;
       return { cells, keep: 0, exam: examScaledTotal, total: examScaledTotal };
 
     } else if (typeof uIdx === 'number') {
@@ -827,7 +829,7 @@ function buildBody() {
         cells += `<td class="td-sub${t} sc${t}"><input type="number" class="sinput sub${t} ${t===2?'t2':''}" min="0" max="${Number(item.max)||0}" value="${val}" data-term="${t}" data-unit="${uIdx}" data-item="${i}" oninput="calcSub(this,${t})"></td>`;
       });
       const unitTotal = ScoreLogic.calcScaled(raw, ScoreLogic.getUnitRawMax(t,uIdx), Number(unit.max)||0);
-      const _hasAnyUnit = (s.grades?.[`t${t}_sub`]||[]).some(v => v !== '' && v !== undefined);
+      const _hasAnyUnit = items.some((_, i) => { const v = flatVals[base+i]; return v !== '' && v !== undefined && v !== null; });
       if (items.length>0) cells += `<td class="td-sc${t} sc${t} unit-total-${t}" data-unit="${uIdx}">${_hasAnyUnit ? unitTotal : '-'}</td>`;
       return { cells, keep: 0, exam: 0, total: unitTotal };
 
@@ -951,20 +953,44 @@ function recalcTotsFromExamSub(tr, t, examTotal) {
 
 // ── คำนวณ "รวมหน่วย" ทันทีโดยไม่ต้องรอ oninput ──
 function _recalcUnitTotals(tr, t) {
-  const flatVals = [...tr.querySelectorAll(`.sub${t}`)].map(i => i.value);
-  ScoreLogic.getUnitOffsets(t).forEach(({ unitIndex, start, count }) => {
+  // กรณีดู tab หน่วยเดียว — inputs ทั้งหมดใน tr เป็นของหน่วยนั้น
+  // ตรวจจาก data-unit ของ input แรก
+  const allInputs = [...tr.querySelectorAll(`.sub${t}`)];
+  if (!allInputs.length) return;
+
+  const singleUnit = allInputs[0].dataset.unit;
+  const isSingleView = allInputs.every(i => i.dataset.unit === singleUnit);
+
+  if (isSingleView) {
+    // ── tab หน่วยเดียว ──
+    const uIdx = Number(singleUnit);
     let raw = 0, hasAny = false;
-    for (let i = 0; i < count; i++) {
-      const v = flatVals[start + i];
-      if (v !== '' && v !== undefined) hasAny = true;
-      raw += Number(v) || 0;
-    }
-    const unitCell = tr.querySelector(`.unit-total-${t}[data-unit="${unitIndex}"]`);
+    allInputs.forEach(inp => {
+      if (inp.value !== '' && inp.value !== undefined) hasAny = true;
+      raw += Number(inp.value) || 0;
+    });
+    const unitCell = tr.querySelector(`.unit-total-${t}[data-unit="${uIdx}"]`);
     if (unitCell) {
-      const scaled = ScoreLogic.calcScaled(raw, ScoreLogic.getUnitRawMax(t, unitIndex), Number(App.units[t][unitIndex].max) || 0);
+      const scaled = ScoreLogic.calcScaled(raw, ScoreLogic.getUnitRawMax(t, uIdx), Number(App.units[t][uIdx]?.max) || 0);
       unitCell.textContent = hasAny ? scaled : '-';
     }
-  });
+  } else {
+    // ── tab ทั้งหมด — วนทุกหน่วย ──
+    const flatVals = allInputs.map(i => i.value);
+    ScoreLogic.getUnitOffsets(t).forEach(({ unitIndex, start, count }) => {
+      let raw = 0, hasAny = false;
+      for (let i = 0; i < count; i++) {
+        const v = flatVals[start + i];
+        if (v !== '' && v !== undefined) hasAny = true;
+        raw += Number(v) || 0;
+      }
+      const unitCell = tr.querySelector(`.unit-total-${t}[data-unit="${unitIndex}"]`);
+      if (unitCell) {
+        const scaled = ScoreLogic.calcScaled(raw, ScoreLogic.getUnitRawMax(t, unitIndex), Number(App.units[t][unitIndex]?.max) || 0);
+        unitCell.textContent = hasAny ? scaled : '-';
+      }
+    });
+  }
 }
 
 function recalcTots(tr) {
