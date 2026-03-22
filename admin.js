@@ -81,12 +81,25 @@ function _subjMatchesTerm(subjectName, term) {
 function switchGradeTerm(term) {
   App.gradeTerm = term;
   // อัปเดต style ปุ่ม
-  const active   = { background: '#6d28d9', color: '#fff' };
-  const inactive = { background: '#f1f5f9', color: '#64748b' };
   const btn1 = $('termTab1'), btn2 = $('termTab2');
-  if (btn1) Object.assign(btn1.style, term === 1 ? active : inactive);
-  if (btn2) Object.assign(btn2.style, term === 2 ? active : inactive);
+  if (btn1) {
+    btn1.style.background = term === 1 ? '#6d28d9' : '#fff';
+    btn1.style.color      = term === 1 ? '#fff'    : '#6d28d9';
+  }
+  if (btn2) {
+    btn2.style.background = term === 2 ? '#6d28d9' : '#fff';
+    btn2.style.color      = term === 2 ? '#fff'    : '#6d28d9';
+  }
   updateSubjDrop();
+  // ถ้าโหลดข้อมูลอยู่แล้ว และวิชาที่เลือกไม่มีเลข → rebuild ตารางตามเทอมใหม่
+  if (App.students && App.students.length) {
+    const subj = $('gSubj')?.value || '';
+    const hasNum = /\s\d+$/.test(subj);
+    if (!hasNum) {
+      App.subjOnlyTerm = term;
+      if (typeof buildTable === 'function') buildTable();
+    }
+  }
 }
 
 function updateSubjDrop() {
