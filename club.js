@@ -221,19 +221,43 @@ async function loadSavedClub() {
       )
     );
 
-    const savedMembers = [];
-    const savedResultMap = {};
-    let savedClubName = '';
+    // จัดกลุ่มตามชื่อชุมนุม (อาจมีหลายชุมนุมในโรงเรียน)
+    const clubGroups = {}; // { clubName: [ {studentId, name, classroom, result} ] }
 
     savedResults.forEach(({ cls, students }) => {
       students.forEach(s => {
         if (s.clubName) {
-          savedMembers.push({ studentId: s.studentId, name: s.name, classroom: cls });
-          if (s.result) savedResultMap[s.studentId] = s.result;
-          if (!savedClubName) savedClubName = s.clubName;
+          if (!clubGroups[s.clubName]) clubGroups[s.clubName] = [];
+          clubGroups[s.clubName].push({
+            studentId: s.studentId,
+            name:      s.name,
+            classroom: cls,
+            result:    s.result || ''
+          });
         }
       });
     });
+
+    const clubNames = Object.keys(clubGroups);
+
+    if (clubNames.length === 0) {
+      Utils.toast('ยังไม่มีข้อมูลชุมนุมที่บันทึกไว้');
+      _renderClubMain();
+      Utils.hideLoading();
+      return;
+    }
+
+    // เลือกชุมนุมที่จะโหลด
+    // ถ้ามีชุมนุมเดิมอยู่แล้ว (Club.clubName) ให้โหลดอันนั้น
+    // ถ้าไม่มี ให้เลือกชุมนุมที่มีสมาชิกมากที่สุด
+    let targetClub = Club.clubName && clubGroups[Club.clubName]
+      ? Club.clubName
+      : clubNames.sort((a, b) => clubGroups[b].length - clubGroups[a].length)[0];
+
+    const savedMembers    = clubGroups[targetClub].map(s => ({ studentId: s.studentId, name: s.name, classroom: s.classroom }));
+    const savedResultMap  = {};
+    clubGroups[targetClub].forEach(s => { if (s.result) savedResultMap[s.studentId] = s.result; });
+    const savedClubName   = targetClub;
 
     if (savedMembers.length === 0) {
       Utils.toast('ยังไม่มีข้อมูลชุมนุมที่บันทึกไว้');
