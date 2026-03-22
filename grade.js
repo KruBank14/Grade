@@ -673,12 +673,16 @@ function buildHead() {
   let r2 = '', r3 = '';
 
   if (isYear) {
+    const keepAll = ScoreLogic.getUnitsMax(1) + ScoreLogic.getUnitsMax(2);
+    const examAll = ScoreLogic.getExamMax(1)  + ScoreLogic.getExamMax(2);
     r1 += `<th rowspan="3" class="th-t1sc" style="width:80px;background:#ede9fe;color:#6d28d9;">เก็บ ท.1<br><small>(${ScoreLogic.getUnitsMax(1)})</small></th>
             <th rowspan="3" class="th-t1e"  style="width:72px;">สอบ ท.1<br><small>(${ScoreLogic.getExamMax(1)})</small></th>
             <th rowspan="3" class="th-t1t"  style="width:80px;">รวม ท.1<br><small>(${tgt})</small></th>
             <th rowspan="3" class="th-t2sc" style="width:80px;background:#dbeafe;color:#1d4ed8;">เก็บ ท.2<br><small>(${ScoreLogic.getUnitsMax(2)})</small></th>
             <th rowspan="3" class="th-t2e"  style="width:72px;">สอบ ท.2<br><small>(${ScoreLogic.getExamMax(2)})</small></th>
-            <th rowspan="3" class="th-t2t"  style="width:80px;">รวม ท.2<br><small>(${tgt})</small></th>`;
+            <th rowspan="3" class="th-t2t"  style="width:80px;">รวม ท.2<br><small>(${tgt})</small></th>
+            <th rowspan="3" style="width:80px;background:#166534;color:#fff;">เก็บทั้งปี<br><small>(${keepAll})</small></th>
+            <th rowspan="3" style="width:72px;background:#075985;color:#fff;">สอบทั้งปี<br><small>(${examAll})</small></th>`;
   } else {
     const units = App.units[t] || [];
     const uIdx  = App.activeUnit ?? null;
@@ -757,7 +761,7 @@ function buildBody() {
       const k1   = Number(g.t1_acc)||0, e1 = Number(g.t1_exam)||0, r1 = k1+e1;
       const k2   = Number(g.t2_acc)||0, e2 = Number(g.t2_exam)||0, r2 = k2+e2;
       const grand = r1+r2;
-      const cls  = (v,mx) => v===0?'nil':v>=mx*0.5?'ok':'fail';
+      const keepAll = k1+k2, examAll = e1+e2;
       return `<tr data-sid="${s.studentId}">
         <td class="s-c0">${idx+1}</td><td class="s-c1">${s.studentId}</td>
         <td class="s-c2"><span>${s.name}</span></td>
@@ -768,6 +772,8 @@ function buildBody() {
         <td><span class="tbadge ${k2===0?'nil':'ok'}">${k2||'-'}</span></td>
         <td><span class="tbadge ${e2===0?'nil':'ok'}">${e2||'-'}</span></td>
         <td><span class="tbadge ${r2===0?'nil':r2>=tgt*0.5?'ok':'fail'} t2tot">${r2||'-'}</span></td>
+        <td><span class="tbadge ${keepAll===0?'nil':'ok'}">${keepAll||'-'}</span></td>
+        <td><span class="tbadge ${examAll===0?'nil':'ok'}">${examAll||'-'}</span></td>
         <td><span class="gbadge ${grand===0?'nil':grand>=tgt?'ok':'fail'} gtot">${grand||'-'}</span></td>
         <td style="background:#f8fafc;"><span class="gbadge ${grand===0?'nil':grand>=tgt?'ok':'fail'} final-grade" style="font-size:1.05rem;border:2px solid #c7d2fe;min-width:48px;">${grand===0?'-':Utils.calcGradeFrontend(grand)}</span></td>
       </tr>`;
