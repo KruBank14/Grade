@@ -1268,8 +1268,6 @@ body{
 .sm-btn-del:hover{background:#fee2e2;border-color:#ef4444;}
 .sm-badge{display:inline-flex;align-items:center;gap:3px;padding:2px 9px;border-radius:50px;font-size:.72rem;font-weight:800;white-space:nowrap;flex-shrink:0;}
 .sm-badge.seq{background:#ede9fe;color:#6d28d9;border:1px solid #ddd6fe;}
-.sm-btn-seq{padding:3px 9px;border:1.5px solid #ddd6fe;border-radius:7px;background:#faf5ff;color:#6d28d9;font-size:.72rem;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;transition:all .12s;}
-.sm-btn-seq:hover{border-color:#7c3aed;color:#5b21b6;background:#ede9fe;}
 @media(max-width:600px){.sm-name{min-width:80px;}}
 .subject-overview-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;}
 .overview-item{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:12px;min-height:78px;}
@@ -1457,6 +1455,7 @@ body{
         </div>
 
         <!-- Subject list -->
+        <div id="smSeqHint" style="display:none;background:#ede9fe;border:1px solid #ddd6fe;border-radius:8px;padding:8px 12px;font-size:.78rem;color:#5b21b6;margin-bottom:10px;"></div>
         <div id="smSubjectList" style="display:flex;flex-direction:column;gap:4px;margin-bottom:14px;"></div>
 
         <!-- Add new -->
