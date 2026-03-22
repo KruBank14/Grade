@@ -311,7 +311,7 @@ function buildBody() {
     });
     const keep = ScoreLogic.calcKeepFromFlat(t, flatVals), exam = Number(s.grades?.[`t${t}_exam`]) || 0, total = keep + exam;
     cells += `<td class="td-sc${t}"><span class="t${t}sc">${keep || '-'}</span></td>
-              <td><input type="number" class="sinput ${t===2?'t2':''} s-t${t}e" min="0" max="${ScoreLogic.getExamMax(t)}" value="${s.grades?.[`t${t}_exam`] ?? ''}" oninput="calcExam(this)"></td>
+              <td><input type="number" class="sinput ${t===2?'t2':''} s-t${t}e" data-term="${t}" data-type="exam" min="0" max="${ScoreLogic.getExamMax(t)}" value="${s.grades?.[`t${t}_exam`] ?? ''}" oninput="calcExam(this)"></td>
               <td><span class="tbadge ${total === 0 ? 'nil' : (total >= 25 ? 'ok' : 'fail')} t${t}tot">${total || '-'}</span></td>`;
     return { cells, keep, exam, total };
   };
