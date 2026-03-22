@@ -86,11 +86,8 @@ function refreshUnitPanelLabels() {
 function switchTerm(t, btn) {
   if (btn?.closest('.ttabs')) btn.closest('.ttabs').querySelectorAll('.ttab').forEach(b => b.classList.remove('on'));
   if (btn) btn.classList.add('on');
-  $('subPanel_1').style.display  = t === 1 ? '' : 'none';
-  $('subPanel_2').style.display  = t === 2 ? '' : 'none';
-  if ($('examPanel_1')) $('examPanel_1').style.display = t === 1 ? '' : 'none';
-  if ($('examPanel_2')) $('examPanel_2').style.display = t === 2 ? '' : 'none';
-  if (typeof renderExamList === 'function') renderExamList(t);
+  $('subPanel_1').style.display = t === 1 ? '' : 'none';
+  $('subPanel_2').style.display = t === 2 ? '' : 'none';
 }
 
 
@@ -157,19 +154,108 @@ function renderSubList(t) {
     updateAutoScoreDisplay(); refreshCourseOverview(); return;
   }
 
-  // activeSubUnit[t] = index หน่วยที่กำลังแสดง (default 0)
+  // activeSubUnit[t] = index หน่วย (0,1,2...) หรือ 'exam'
   if (!App.activeSubUnit) App.activeSubUnit = {};
-  if (App.activeSubUnit[t] === undefined || App.activeSubUnit[t] >= units.length)
+  if (App.activeSubUnit[t] === undefined || (typeof App.activeSubUnit[t] === 'number' && App.activeSubUnit[t] >= units.length))
     App.activeSubUnit[t] = 0;
-  const ui = App.activeSubUnit[t];
-  const unit = units[ui];
+  const active = App.activeSubUnit[t]; // number หรือ 'exam'
+  const isExam = active === 'exam';
+  const ui     = isExam ? 0 : Number(active);
+  const unit   = units[ui] || {};
 
-  // ── Tab bar ──
-  const tabsHtml = units.map((u, i) =>
-    `<button class="utab ${i===ui?'on':''}" onclick="App.activeSubUnit[${t}]=${i};renderSubList(${t})">
-      ${u.name||`หน่วย ${i+1}`}
-    </button>`
-  ).join('');
+  // ── Tab bar: หน่วย 1, 2, 3, ... + 📝 สอบ ──
+  const tabsHtml =
+    units.map((u, i) =>
+      `<button class="utab ${i===active?'on':''}" onclick="App.activeSubUnit[${t}]=${i};renderSubList(${t})">
+        ${u.name||`หน่วย ${i+1}`}
+      </button>`
+    ).join('') +
+    `<button class="utab ${isExam?'on':''}"
+       style="${isExam?'':'background:#f0f9ff;border-color:#bae6fd;color:#0369a1;'}"
+       onclick="App.activeSubUnit[${t}]='exam';renderSubList(${t})">
+       📝 สอบ
+     </button>`;
+
+  // ── Tab สอบ ──
+  if (isExam) {
+    const exams = App.examUnits?.[t] || [];
+    const allInds = [
+      ...($('ci_indicators_formative')?.value||'').split(/\r?\n/).map(s=>s.trim()).filter(Boolean).map(s=>({txt:s,type:'formative'})),
+      ...($('ci_indicators_summative')?.value||'').split(/\r?\n/).map(s=>s.trim()).filter(Boolean).map(s=>({txt:s,type:'summative'}))
+    ];
+
+    const examCardsHtml = exams.length === 0
+      ? `<div style="color:#94a3b8;font-size:.83rem;text-align:center;padding:20px;">ยังไม่มีรายการสอบ — กดเพิ่มด้านล่าง</div>`
+      : exams.map((exam, ei) => {
+          const selInds   = Array.isArray(exam.indicators) ? exam.indicators : [];
+          const rawMax    = Number(exam.rawMax)    || Number(exam.max) || 0;
+          const scaledMax = Number(exam.scaledMax) || Number(exam.max) || 0;
+          const indHtml   = allInds.length === 0
+            ? `<div style="color:#94a3b8;font-size:.75rem;">ยังไม่มีตัวชี้วัด</div>`
+            : allInds.map(ind => {
+                const chk   = selInds.includes(ind.txt) ? 'checked' : '';
+                const badge = ind.type==='formative'
+                  ? `<span style="font-size:.65rem;background:#dbeafe;color:#1d4ed8;border-radius:4px;padding:1px 5px;">ระหว่างทาง</span>`
+                  : `<span style="font-size:.65rem;background:#dcfce7;color:#15803d;border-radius:4px;padding:1px 5px;">ปลายทาง</span>`;
+                return `<label style="display:flex;align-items:flex-start;gap:6px;cursor:pointer;padding:3px 0;font-size:.8rem;">
+                  <input type="checkbox" ${chk} style="margin-top:2px;width:14px;height:14px;cursor:pointer;flex-shrink:0;"
+                    onchange="App.examUnits[${t}][${ei}].indicators=App.examUnits[${t}][${ei}].indicators||[];
+                      this.checked
+                        ? (App.examUnits[${t}][${ei}].indicators.includes('${ind.txt.replace(/'/g,"\\'")}') || App.examUnits[${t}][${ei}].indicators.push('${ind.txt.replace(/'/g,"\\'")}'))
+                        : (App.examUnits[${t}][${ei}].indicators = App.examUnits[${t}][${ei}].indicators.filter(x=>x!=='${ind.txt.replace(/'/g,"\\'")}'))">
+                  <span>${ind.txt} ${badge}</span>
+                </label>`;
+              }).join('');
+
+          return `<div class="sub-row p-3 border rounded bg-white mb-2" style="display:block;border-color:#bae6fd;">
+            <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
+              <span style="font-weight:800;font-size:.85rem;color:#0369a1;">สอบ ${ei+1}.</span>
+              <input class="sub-name" type="text" value="${exam.name||''}" placeholder="ชื่อการสอบ"
+                style="min-width:140px;" onchange="App.examUnits[${t}][${ei}].name=this.value">
+              <button class="btn-rm" onclick="rmExam(${t},${ei})">✕</button>
+            </div>
+            <div class="d-flex align-items-center gap-3 flex-wrap mb-1"
+                 style="background:#f0f9ff;border-radius:8px;padding:8px 12px;">
+              <div style="display:flex;align-items:center;gap:6px;">
+                <span style="font-size:.78rem;color:#0369a1;font-weight:700;">คะแนนดิบ</span>
+                <input class="sub-max" type="number" min="1" value="${rawMax}" style="width:70px;"
+                  onchange="App.examUnits[${t}][${ei}].rawMax=Number(this.value)||0;renderSubList(${t});">
+              </div>
+              <span style="color:#94a3b8;">→</span>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <span style="font-size:.78rem;color:#6d28d9;font-weight:700;">นับเข้าเกรด</span>
+                <input class="sub-max" type="number" min="1" value="${scaledMax}" style="width:70px;"
+                  onchange="App.examUnits[${t}][${ei}].scaledMax=Number(this.value)||0;updateAutoScoreDisplay();renderSubList(${t});">
+              </div>
+              <span style="font-size:.75rem;color:#64748b;background:#e0f2fe;padding:3px 8px;border-radius:6px;">
+                กรอก ${rawMax} → ได้ ${scaledMax} คะแนน
+              </span>
+            </div>
+            ${allInds.length > 0 ? `
+            <div style="margin-top:8px;border-top:1px dashed #bae6fd;padding-top:8px;">
+              <div style="font-weight:700;font-size:.78rem;color:#0369a1;margin-bottom:6px;">
+                🎯 ตัวชี้วัด <span style="font-weight:400;color:#94a3b8;">(${selInds.length}/${allInds.length})</span>
+              </div>
+              <div style="max-height:180px;overflow-y:auto;">${indHtml}</div>
+            </div>` : ''}
+          </div>`;
+        }).join('');
+
+    wrap.innerHTML = `
+      <div class="unit-tabs" style="margin-bottom:10px;">${tabsHtml}</div>
+      <div style="background:#f0f9ff;border-radius:10px;padding:12px 14px;margin-bottom:10px;">
+        <div style="font-size:.82rem;color:#0369a1;font-weight:700;margin-bottom:4px;">
+          📝 รายการสอบ เทอม ${t}
+          <span style="font-weight:400;color:#94a3b8;">(สอบรวม ${ScoreLogic.getExamMax(t)} คะแนน)</span>
+        </div>
+        ${examCardsHtml}
+        <button type="button" class="btn-add-sub mt-2" onclick="addExam(${t})"
+          style="background:#0284c7;color:#fff;border:none;padding:6px 16px;border-radius:8px;font-weight:700;cursor:pointer;font-family:inherit;width:100%;margin-top:8px;">
+          ➕ เพิ่มรายการสอบ
+        </button>
+      </div>`;
+    updateAutoScoreDisplay(); refreshCourseOverview(); return;
+  }
 
   // ── Content: แก้ชื่อ/คะแนนเต็มหน่วย + รายการงาน ──
   const itemsHtml = (unit.items||[]).map((item, ii) =>
@@ -248,15 +334,19 @@ function toggleIgnoreR() { App.ignoreR = $('toggleR').checked; $$('#gtBody tr[da
 // ── จัดการรายการสอบ (examUnits) ──────────────────────
 function addExam(t) {
   if (!App.examUnits) App.examUnits = { 1: [], 2: [] };
-  const examMax = ScoreLogic.getExamMax(t); // สัดส่วนที่เหลือ
+  const examMax = ScoreLogic.getExamMax(t);
   App.examUnits[t].push({ name: `สอบครั้งที่ ${App.examUnits[t].length + 1}`, rawMax: 100, scaledMax: examMax, indicators: [] });
-  renderExamList(t);
+  if (!App.activeSubUnit) App.activeSubUnit = {};
+  App.activeSubUnit[t] = 'exam';
+  renderSubList(t);
   updateAutoScoreDisplay();
 }
 function rmExam(t, ei) {
   if (!confirm(`ลบ "${App.examUnits[t][ei].name}" ?`)) return;
   App.examUnits[t].splice(ei, 1);
-  renderExamList(t);
+  if (!App.activeSubUnit) App.activeSubUnit = {};
+  App.activeSubUnit[t] = 'exam';
+  renderSubList(t);
   updateAutoScoreDisplay();
 }
 
