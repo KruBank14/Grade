@@ -9,6 +9,11 @@
 function writeToPrintWindow(win, html, title = 'พิมพ์') {
   if (!win) return;
   try {
+    // inject print script ถ้ายังไม่มี
+    const PRINT_SCRIPT = '<script>window.onload=()=>setTimeout(()=>window.print(),800);<\/script>';
+    if (!html.includes('window.print()')) {
+      html = html.replace('</body>', PRINT_SCRIPT + '</body>');
+    }
     win.document.open();
     win.document.write(html.includes('<html') ? html
       : `<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><title>${title}</title></head><body>${html}</body></html>`);
