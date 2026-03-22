@@ -610,6 +610,7 @@ function buildHead() {
     const units = App.units[t] || [];
     const uIdx  = App.activeUnit ?? null;
     if (uIdx === null) {
+      // ทั้งหมด — แสดงครบ
       const flat = ScoreLogic.getFlatItems(t);
       if (flat.length > 0) r1 += `<th colspan="${flat.length + units.length}" class="th-t${t}s sc${t}">📝 หน่วย / งาน เทอม ${t}</th>`;
       r1 += `<th rowspan="3" class="th-t${t}sc" style="width:88px;">เก็บ ท.${t}<br><small>(${ScoreLogic.getUnitsMax(t)})</small></th>
@@ -623,7 +624,9 @@ function buildHead() {
           r3 += `<th class="th-t${t}sc sc${t}">รวม</th>`;
         }
       });
+
     } else if (uIdx === -1) {
+      // สอบ — จบแค่รวมสอบ
       const examUnits = App.examUnits?.[t] || [];
       const totalItems = examUnits.reduce((s,eu) => s+(eu.items||[]).length, 0);
       if (examUnits.length > 0) {
@@ -639,25 +642,28 @@ function buildHead() {
       } else {
         r1 += `<th rowspan="3" class="th-t${t}e" style="width:140px;color:#94a3b8;">ยังไม่มีรายการสอบ</th>`;
       }
-      r1 += `<th rowspan="3" class="th-t${t}sc" style="width:100px;">เก็บรวม<br><small>(${ScoreLogic.getUnitsMax(t)})</small></th>
-              <th rowspan="3" class="th-t${t}e" style="width:88px;">สอบรวม<br><small>(${ScoreLogic.getExamMax(t)})</small></th>
-              <th rowspan="3" class="th-t${t}t" style="width:88px;">รวม<br><small>(${tgt})</small></th>`;
+      // จบแค่ "สอบรวม"
+      r1 += `<th rowspan="3" class="th-t${t}e" style="width:100px;background:#0369a1;color:#fff;">สอบรวม<br><small>(${ScoreLogic.getExamMax(t)})</small></th>`;
+
     } else {
+      // หน่วย X — จบแค่รวมหน่วย
       const u = units[uIdx]||{}, items = u.items||[];
       if (items.length > 0) {
         r1 += `<th colspan="${items.length+1}" class="th-t${t}s sc${t}">${u.name||`หน่วย ${uIdx+1}`} <small>(${Number(u.max)||0} คะแนน)</small></th>`;
         items.forEach(item => r2 += `<th class="th-t${t}raw sc${t}">${item.name}<br><small>(${Number(item.max)||0})</small></th>`);
         r2 += `<th class="th-t${t}sc sc${t}">รวมหน่วย</th>`;
       }
-      r1 += `<th rowspan="3" class="th-t${t}sc" style="width:88px;background:#6d28d9;color:#fff;">เก็บรวม<br><small>(${ScoreLogic.getUnitsMax(t)})</small></th>
-              <th rowspan="3" class="th-t${t}e" style="width:72px;">สอบ<br><small>(${ScoreLogic.getExamMax(t)})</small></th>
-              <th rowspan="3" class="th-t${t}t" style="width:72px;">รวม<br><small>(${tgt})</small></th>`;
+      // จบแค่ "รวมหน่วย" — ไม่มีเก็บรวม สอบ รวม เกรด
     }
   }
 
-  const grandLabel = isYear ? `รวมทั้งปี<br><small>(${tgt*2})</small>` : `รวม<br><small>(${tgt})</small>`;
-  r1 += `<th rowspan="3" class="th-grand" style="width:80px;background:#1e3a5f;color:#fff;">${grandLabel}</th>
-          <th rowspan="3" style="width:65px;background:#4f46e5;color:#fff;font-size:15px;vertical-align:middle;">เกรด</th>`;
+  // เพิ่ม รวม+เกรด เฉพาะ tab ทั้งหมด (uIdx===null) หรือ ทั้งปี
+  const uIdxFinal = (App.activeTerm === 0) ? null : (App.activeUnit ?? null);
+  if (App.activeTerm === 0 || uIdxFinal === null) {
+    const grandLabel = isYear ? `รวมทั้งปี<br><small>(${tgt*2})</small>` : `รวม<br><small>(${tgt})</small>`;
+    r1 += `<th rowspan="3" class="th-grand" style="width:80px;background:#1e3a5f;color:#fff;">${grandLabel}</th>
+            <th rowspan="3" style="width:65px;background:#4f46e5;color:#fff;font-size:15px;vertical-align:middle;">เกรด</th>`;
+  }
   $('gtHead').innerHTML = `<tr>${r1}</tr><tr>${r2}</tr><tr>${r3}</tr>`;
 }
 
@@ -710,7 +716,43 @@ function buildBody() {
     const totalBadge = `<span class="tbadge ${total===0?'nil':total>=(tgt*0.5)?'ok':'fail'} t${t}tot">${total||'-'}</span>`;
 
     let cells = '';
-    if (uIdx === null) {
+
+    if (uIdx === -1) {
+      // ── สอบ — สอบย่อย + รวมสอบ ──
+      const examUnits = App.examUnits?.[t] || [];
+      let examFlatIdx = 0, examScaledTotal = 0;
+      const examFlat = s.grades?.[`t${t}_exam_sub`] || [];
+      examUnits.forEach((eu, ei) => {
+        const items = eu.items || []; let raw = 0;
+        items.forEach((item) => {
+          const val = examFlat[examFlatIdx] ?? '';
+          raw += Number(val)||0;
+          cells += `<td class="td-sub${t} sc${t}"><input type="number" class="sinput exam-sub${t}" min="0" max="${Number(item.max)||0}" value="${val}" data-term="${t}" data-examflatidx="${examFlatIdx}" oninput="calcExamSub(this,${t})"></td>`;
+          examFlatIdx++;
+        });
+        const scaled = ScoreLogic.calcScaled(raw, ScoreLogic.getExamRawMax(t,ei), Number(eu.max)||0);
+        examScaledTotal += scaled;
+        cells += `<td class="td-sc${t} sc${t} exam-unit-total-${t}" data-examidx="${ei}">${scaled||'-'}</td>`;
+      });
+      if (!examUnits.length) cells += `<td style="color:#94a3b8;font-size:.78rem;padding:6px 10px;">ยังไม่มีรายการสอบ</td>`;
+      cells += `<td><span class="tbadge ${examScaledTotal===0?'nil':'ok'} t${t}e-tot">${Math.round(examScaledTotal*100)/100||'-'}</span></td>`;
+      return { cells, keep: 0, exam: examScaledTotal, total: examScaledTotal };
+
+    } else if (typeof uIdx === 'number') {
+      // ── หน่วย X — งานย่อย + รวมหน่วย ──
+      const unit = units[uIdx]||{}, items = unit.items||[];
+      const offset = ScoreLogic.getUnitOffsets(t).find(o=>o.unitIndex===uIdx);
+      const base = offset?.start ?? 0; let raw = 0;
+      items.forEach((item,i) => {
+        const val = flatVals[base+i]??''; raw += Number(val)||0;
+        cells += `<td class="td-sub${t} sc${t}"><input type="number" class="sinput sub${t} ${t===2?'t2':''}" min="0" max="${Number(item.max)||0}" value="${val}" data-term="${t}" data-unit="${uIdx}" data-item="${i}" oninput="calcSub(this,${t})"></td>`;
+      });
+      const unitTotal = ScoreLogic.calcScaled(raw, ScoreLogic.getUnitRawMax(t,uIdx), Number(unit.max)||0);
+      if (items.length>0) cells += `<td class="td-sc${t} sc${t} unit-total-${t}" data-unit="${uIdx}">${unitTotal||'-'}</td>`;
+      return { cells, keep: 0, exam: 0, total: unitTotal };
+
+    } else {
+      // ── ทั้งหมด — ทุกหน่วย + เก็บ + สอบ + รวม ──
       ScoreLogic.getUnitOffsets(t).forEach(({ unitIndex, start, count }) => {
         const unit = units[unitIndex]; let raw = 0;
         for (let i = 0; i < count; i++) {
@@ -719,43 +761,16 @@ function buildBody() {
         }
         cells += `<td class="td-sc${t} sc${t} unit-total-${t}" data-unit="${unitIndex}">${ScoreLogic.calcScaled(raw,ScoreLogic.getUnitRawMax(t,unitIndex),Number(unit.max)||0)||'-'}</td>`;
       });
-    } else if (uIdx === -1) {
-      // ── สอบ — แสดง input ต่อสอบย่อยของแต่ละ examUnit ──
-      const examUnits = App.examUnits?.[t] || [];
-      let examFlatIdx = 0;
-      const examFlat  = s.grades?.[`t${t}_exam_sub`] || [];
-      examUnits.forEach((eu, ei) => {
-        const items = eu.items || [];
-        let raw = 0;
-        items.forEach((item, ii) => {
-          const val = examFlat[examFlatIdx] ?? '';
-          raw += Number(val)||0;
-          cells += `<td class="td-sub${t} sc${t}"><input type="number" class="sinput exam-sub${t}" min="0" max="${Number(item.max)||0}" value="${val}" data-term="${t}" data-examflatidx="${examFlatIdx}" oninput="calcExamSub(this,${t})"></td>`;
-          examFlatIdx++;
-        });
-        const unitTotal = ScoreLogic.calcScaled(raw, ScoreLogic.getExamRawMax(t, ei), Number(eu.max)||0);
-        cells += `<td class="td-sc${t} sc${t} exam-unit-total-${t}" data-examidx="${ei}">${unitTotal||'-'}</td>`;
-      });
-      if (!examUnits.length) {
-        cells += `<td style="color:#94a3b8;font-size:.78rem;padding:6px 10px;">ยังไม่มีรายการสอบ<br><small>ตั้งค่าในแท็บ สอบ</small></td>`;
-      }
-      const unit = units[uIdx]||{}, items = unit.items||[];
-      const offset = ScoreLogic.getUnitOffsets(t).find(o=>o.unitIndex===uIdx);
-      const base = offset?.start ?? 0; let raw = 0;
-      items.forEach((item,i) => {
-        const val = flatVals[base+i]??''; raw += Number(val)||0;
-        cells += `<td class="td-sub${t} sc${t}"><input type="number" class="sinput sub${t} ${t===2?'t2':''}" min="0" max="${Number(item.max)||0}" value="${val}" data-term="${t}" data-unit="${uIdx}" data-item="${i}" oninput="calcSub(this,${t})"></td>`;
-      });
-      if (items.length>0) cells += `<td class="td-sc${t} sc${t} unit-total-${t}" data-unit="${uIdx}">${ScoreLogic.calcScaled(raw,ScoreLogic.getUnitRawMax(t,uIdx),Number(unit.max)||0)||'-'}</td>`;
+      cells += `<td class="td-sc${t}"><span class="t${t}sc">${keep||'-'}</span></td>
+                <td>${mkExamInput(s)}</td>
+                <td>${totalBadge}</td>`;
     }
-    cells += `<td class="td-sc${t}"><span class="t${t}sc">${keep||'-'}</span></td>
-              <td>${mkExamInput(s)}</td>
-              <td>${totalBadge}</td>`;
     return { cells, keep, exam, total };
   };
 
   $('gtBody').innerHTML = App.students.map((s, idx) => {
     const st = s.stats||{}, tc = buildCells(s), fs = tc.total;
+    const showGrand = uIdx === null;
     return `<tr data-sid="${s.studentId}">
       <td class="s-c0">${idx+1}</td><td class="s-c1">${s.studentId}</td>
       <td class="s-c2"><div class="d-flex justify-content-between align-items-center gap-1"><span>${s.name}</span><div class="d-flex gap-1">
@@ -764,10 +779,11 @@ function buildBody() {
       </div></div></td>
       <td><span class="sp p">ม ${st.present||0}</span> <span class="sp a">ข ${st.absent||0}</span> <span class="sp l">ล ${st.leave||0}</span></td>
       ${tc.cells}
-      <td><span class="gbadge ${fs===0?'nil':fs<tgt*0.5?'fail':'ok'} gtot">${fs||'-'}</span></td>
-      <td style="background:#f8fafc;"><span class="gbadge ${fs===0?'nil':fs<tgt*0.5?'fail':'ok'} final-grade" style="font-size:1.05rem;border:2px solid #c7d2fe;min-width:48px;">${fs===0?'-':Utils.calcGradeFrontend(fs)}</span></td>
+      ${showGrand ? `
+        <td><span class="gbadge ${fs===0?'nil':fs<tgt*0.5?'fail':'ok'} gtot">${fs||'-'}</span></td>
+        <td style="background:#f8fafc;"><span class="gbadge ${fs===0?'nil':fs<tgt*0.5?'fail':'ok'} final-grade" style="font-size:1.05rem;border:2px solid #c7d2fe;min-width:48px;">${fs===0?'-':Utils.calcGradeFrontend(fs)}</span></td>
+      ` : ''}
     </tr>`;
-  }).join('');
   refreshAllScoreInputStates($('gtBody'));
 }
 
