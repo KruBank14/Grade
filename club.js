@@ -13,6 +13,7 @@ const Club = {
   attMap: {},           // { studentId: ['ป','ข','ล',...] }  ← ข้อมูลที่บันทึกไว้
   realAttMap: {},       // { studentId: { 'dd/mm/yyyy': 'ม'|'ข'|'ล' } } ← จาก Attendance จริง
   resultMap: {},        // { studentId: 'ผ่าน'|'ไม่ผ่าน' }
+  savedMembers: [],     // snapshot สมาชิกที่โหลดมาจาก GAS (ใช้เทียบตอน save)
   allClassStudents: {},
   loadErrors: {},
   activeClassTab: '',
@@ -140,10 +141,11 @@ function switchClubTab(term, btn) {
   Club.loaded = false;
   Club.members    = [];
   Club.topics     = [];
-  Club.attMap     = {};
-  Club.realAttMap = {};
-  Club.resultMap  = {};
-  Club.dates      = [];
+  Club.attMap        = {};
+  Club.realAttMap    = {};
+  Club.resultMap     = {};
+  Club.dates         = [];
+  Club.savedMembers  = [];
   Club.clubName   = '';
   Club.teacher    = '';
   Club.dayOfWeek  = '5';
@@ -240,8 +242,9 @@ async function loadSavedClub() {
       return;
     }
 
-    Club.members    = savedMembers;
-    Club.resultMap  = savedResultMap;
+    Club.members       = savedMembers;
+    Club.savedMembers  = savedMembers.map(m => ({ ...m })); // snapshot
+    Club.resultMap     = savedResultMap;
     if (savedClubName) Club.clubName = savedClubName;
 
     // โหลด termDates + holidays ถ้ายังไม่มี (จำเป็นสำหรับคำนวณวันชุมนุม)
@@ -744,22 +747,19 @@ async function saveClubData() {
     attArray:  Club.attMap[m.studentId]    || []
   }));
 
-  // รวมสมาชิกที่ถูกลบออก (เคยอยู่ใน allClassStudents แต่ไม่อยู่ใน members แล้ว)
-  // ส่งไปพร้อม clubName = '' เพื่อให้ GAS ล้างข้อมูล
+  // หาสมาชิกที่ถูกลบออก = อยู่ใน savedMembers แต่ไม่อยู่ใน members ปัจจุบัน
   const currentIds = new Set(Club.members.map(m => m.studentId));
-  Object.entries(Club.allClassStudents).forEach(([cls, students]) => {
-    students.forEach(s => {
-      if (s.inOtherClub && !currentIds.has(s.studentId)) {
-        records.push({
-          studentId: s.studentId,
-          classroom: cls,
-          attended:  0,
-          result:    '',
-          attArray:  [],
-          _remove:   true  // flag ให้ GAS รู้ว่าต้องล้าง
-        });
-      }
-    });
+  Club.savedMembers.forEach(m => {
+    if (!currentIds.has(m.studentId)) {
+      records.push({
+        studentId: m.studentId,
+        classroom: m.classroom,
+        attended:  0,
+        result:    '',
+        attArray:  [],
+        _remove:   true
+      });
+    }
   });
 
   Utils.showLoading('บันทึกชุมนุม...');
