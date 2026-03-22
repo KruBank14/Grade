@@ -156,7 +156,8 @@ async function loadGrades() {
   _lockSubjectSelector_();
 
   App.isSemMode  = false;
-  App.activeTerm = App.gradeTerm || 1; // เทอมที่กำลังแสดง
+  App.activeTerm = App.gradeTerm || 1;
+  App.activeUnit = null; // reset เป็น "ทั้งหมด" ทุกครั้งที่โหลดวิชาใหม่
 
   $('lblClass').textContent = cls; $('lblSubj').textContent = subj;
   Utils.showLoading('กำลังโหลดข้อมูล...');
@@ -251,44 +252,81 @@ async function loadGrades() {
 // =====================================================
 // 8. TABLE GENERATOR
 // =====================================================
+
 function buildTable() {
-  buildHead(); buildBody();
+  _buildUnitTabs_();
+  buildHead();
+  buildBody();
   $('gtbl').classList.remove('t1-collapsed', 't2-collapsed');
   App.expanded = { 1: true, 2: true };
-  // sync ปุ่มบันทึก
   const t = App.activeTerm || 1;
   const saveBtn = document.querySelector('.btn-save');
   if (saveBtn) saveBtn.textContent = `💾 บันทึกเทอม ${t}`;
 }
 
+function _buildUnitTabs_() {
+  const t     = App.activeTerm || 1;
+  const units = App.units[t] || [];
+  const wrap  = $('unitTabsRow');
+  if (!wrap) return;
+  if (!units.length) { wrap.innerHTML = ''; return; }
+  const cur = App.activeUnit ?? null;
+  const tabs = [
+    `<button class="utab ${cur===null?'on':''}" onclick="switchUnitTab(null)">📋 ทั้งหมด</button>`,
+    ...units.map((u,i) => `<button class="utab ${cur===i?'on':''}" onclick="switchUnitTab(${i})">${u.name||`หน่วย ${i+1}`}</button>`),
+    `<button class="utab ${cur===-1?'on':''}" onclick="switchUnitTab(-1)">📝 สอบ</button>`
+  ];
+  wrap.innerHTML = `<div class="unit-tabs">${tabs.join('')}</div>`;
+}
+
+function switchUnitTab(unitIdx) {
+  App.activeUnit = unitIdx;
+  buildTable();
+}
+
 function buildHead() {
   ScoreLogic.syncHiddenInputs();
-  let r1 = `<th rowspan="3" class="th-base s-c0" style="width:36px;">ที่</th><th rowspan="3" class="th-base s-c1" style="width:72px;">รหัส</th><th rowspan="3" class="th-base s-c2" style="text-align:left;min-width:145px;">ชื่อ-นามสกุล</th><th rowspan="3" class="th-att" style="width:115px;">มาเรียน</th>`;
+  const t      = App.activeTerm || 1;
+  const uIdx   = App.activeUnit ?? null;
+  const units  = App.units[t] || [];
+  const target = ScoreLogic.getTarget();
+  let r1 = `<th rowspan="3" class="th-base s-c0" style="width:36px;">ที่</th>
+             <th rowspan="3" class="th-base s-c1" style="width:72px;">รหัส</th>
+             <th rowspan="3" class="th-base s-c2" style="text-align:left;min-width:145px;">ชื่อ-นามสกุล</th>
+             <th rowspan="3" class="th-att" style="width:115px;">มาเรียน</th>`;
   let r2 = '', r3 = '';
 
-  const addTermHeaders = (t) => {
-    const flat = ScoreLogic.getFlatItems(t), units = App.units[t] ||[], target = ScoreLogic.getTarget(t);
-    const lblT = ` ท.${t}`;
+  if (uIdx === null) {
+    const flat = ScoreLogic.getFlatItems(t);
     if (flat.length > 0) r1 += `<th colspan="${flat.length + units.length}" class="th-t${t}s sc${t}">📝 หน่วย / งาน เทอม ${t}</th>`;
-    r1 += `<th rowspan="3" class="th-t${t}sc" style="width:88px;"><div style="margin-bottom:3px;">${'เก็บ'+lblT}<br><small>(${ScoreLogic.getUnitsMax(t)})</small></div>${flat.length > 0 ? `<button class="tbtn" id="tbtn${t}" onclick="toggleCols(${t})"><span class="arr">▼</span> ยุบ</button>` : ''}</th>
-           <th rowspan="3" class="th-t${t}e" style="width:72px;">${'สอบ'+lblT}<br><small>(${ScoreLogic.getExamMax(t)})</small></th>
-           <th rowspan="3" class="th-t${t}t" style="width:72px;">รวม${lblT}<br><small>(${target})</small></th>`;
-    
+    r1 += `<th rowspan="3" class="th-t${t}sc" style="width:88px;">เก็บ ท.${t}<br><small>(${ScoreLogic.getUnitsMax(t)})</small></th>
+            <th rowspan="3" class="th-t${t}e" style="width:72px;">สอบ<br><small>(${ScoreLogic.getExamMax(t)})</small></th>
+            <th rowspan="3" class="th-t${t}t" style="width:72px;">รวม<br><small>(${target})</small></th>`;
     units.forEach(u => {
-      const c = (u.items ||[]).length;
+      const c = (u.items||[]).length;
       if (c > 0) {
-        r2 += `<th colspan="${c + 1}" class="th-t${t}si sc${t}">${u.name}<br><small>หน่วย ${Number(u.max)||0} คะแนน</small></th>`;
-        (u.items ||[]).forEach(item => r3 += `<th class="th-t${t}raw sc${t}">${item.name}<br><small>(${Number(item.max)||0})</small></th>`);
-        r3 += `<th class="th-t${t}sc sc${t}">รวมหน่วย</th>`;
+        r2 += `<th colspan="${c+1}" class="th-t${t}si sc${t}">${u.name}<br><small>${Number(u.max)||0} คะแนน</small></th>`;
+        (u.items||[]).forEach(item => r3 += `<th class="th-t${t}raw sc${t}">${item.name}<br><small>(${Number(item.max)||0})</small></th>`);
+        r3 += `<th class="th-t${t}sc sc${t}">รวม</th>`;
       }
     });
-  };
-
-  const t = App.activeTerm || 1;
-  addTermHeaders(t);
-  r1 += `<th rowspan="3" class="th-grand" style="width:74px;">รวม<br><small>(${ScoreLogic.getTarget()})</small></th>
-         <th rowspan="3" style="width:65px;background:#4f46e5;color:#fff;font-size:15px;border-right:1px solid rgba(255,255,255,.12);vertical-align:middle;">เกรด</th>`;
-  r1 += `<th rowspan="3" style="width:65px;background:#4f46e5;color:#fff;font-size:15px;border-right:1px solid rgba(255,255,255,.12);vertical-align:middle;">เกรด</th>`;
+  } else if (uIdx === -1) {
+    r1 += `<th rowspan="3" class="th-t${t}sc" style="width:100px;">เก็บรวม<br><small>(${ScoreLogic.getUnitsMax(t)})</small></th>
+            <th rowspan="3" class="th-t${t}e" style="width:100px;">สอบ<br><small>(${ScoreLogic.getExamMax(t)})</small></th>
+            <th rowspan="3" class="th-t${t}t" style="width:88px;">รวม<br><small>(${target})</small></th>`;
+  } else {
+    const u = units[uIdx] || {}, items = u.items || [];
+    if (items.length > 0) {
+      r1 += `<th colspan="${items.length+1}" class="th-t${t}s sc${t}">${u.name||`หน่วย ${uIdx+1}`} <small>(${Number(u.max)||0} คะแนน)</small></th>`;
+      items.forEach(item => r2 += `<th class="th-t${t}raw sc${t}">${item.name}<br><small>(${Number(item.max)||0})</small></th>`);
+      r2 += `<th class="th-t${t}sc sc${t}">รวมหน่วย</th>`;
+    }
+    r1 += `<th rowspan="3" class="th-t${t}sc" style="width:88px;background:#6d28d9;">เก็บรวม<br><small>(${ScoreLogic.getUnitsMax(t)})</small></th>
+            <th rowspan="3" class="th-t${t}e" style="width:72px;">สอบ<br><small>(${ScoreLogic.getExamMax(t)})</small></th>
+            <th rowspan="3" class="th-t${t}t" style="width:72px;">รวม<br><small>(${target})</small></th>`;
+  }
+  r1 += `<th rowspan="3" class="th-grand" style="width:74px;">รวม<br><small>(${target})</small></th>
+          <th rowspan="3" style="width:65px;background:#4f46e5;color:#fff;font-size:15px;vertical-align:middle;">เกรด</th>`;
   $('gtHead').innerHTML = `<tr>${r1}</tr><tr>${r2}</tr><tr>${r3}</tr>`;
 }
 
@@ -296,44 +334,60 @@ function buildBody() {
   ScoreLogic.syncHiddenInputs();
   if (!App.students.length) return $('gtBody').innerHTML = `<tr><td colspan="50" class="text-center py-4 text-muted">ไม่พบข้อมูลผู้เรียน</td></tr>`;
 
-  const buildTermCells = (t, s) => {
-    const flatVals = Array.isArray(s.grades?.[`t${t}_sub`]) ? s.grades[`t${t}_sub`] :[];
+  const t     = App.activeTerm || 1;
+  const uIdx  = App.activeUnit ?? null;
+  const units = App.units[t] || [];
+  const tgt   = ScoreLogic.getTarget();
+
+  const mkExamInput = (s) => `<input type="number" class="sinput ${t===2?'t2':''} s-t${t}e" data-term="${t}" data-type="exam" min="0" max="${ScoreLogic.getExamMax(t)}" value="${s.grades?.[`t${t}_exam`]??''}" oninput="calcExam(this)">`;
+
+  const buildCells = (s) => {
+    const flatVals = Array.isArray(s.grades?.[`t${t}_sub`]) ? s.grades[`t${t}_sub`] : [];
+    const keep  = ScoreLogic.calcKeepFromFlat(t, flatVals);
+    const exam  = Number(s.grades?.[`t${t}_exam`]) || 0;
+    const total = keep + exam;
+    const totalBadge = `<span class="tbadge ${total===0?'nil':total>=(tgt*0.5)?'ok':'fail'} t${t}tot">${total||'-'}</span>`;
+
     let cells = '';
-    ScoreLogic.getUnitOffsets(t).forEach(({ unitIndex, start, count }) => {
-      const unit = App.units[t][unitIndex];
-      let raw = 0;
-      for (let i = 0; i < count; i++) {
-        const val = flatVals[start + i] ?? '';
-        raw += Number(val) || 0;
-        cells += `<td class="td-sub${t} sc${t}"><input type="number" class="sinput sub${t} ${t===2?'t2':''}" min="0" max="${Number((unit.items||[])[i]?.max)||0}" value="${val}" data-term="${t}" data-unit="${unitIndex}" data-item="${i}" oninput="calcSub(this, ${t})"></td>`;
-      }
-      cells += `<td class="td-sc${t} sc${t} unit-total-${t}" data-unit="${unitIndex}">${ScoreLogic.calcScaled(raw, ScoreLogic.getUnitRawMax(t, unitIndex), Number(unit.max)||0) || '-'}</td>`;
-    });
-    const keep = ScoreLogic.calcKeepFromFlat(t, flatVals), exam = Number(s.grades?.[`t${t}_exam`]) || 0, total = keep + exam;
-    cells += `<td class="td-sc${t}"><span class="t${t}sc">${keep || '-'}</span></td>
-              <td><input type="number" class="sinput ${t===2?'t2':''} s-t${t}e" data-term="${t}" data-type="exam" min="0" max="${ScoreLogic.getExamMax(t)}" value="${s.grades?.[`t${t}_exam`] ?? ''}" oninput="calcExam(this)"></td>
-              <td><span class="tbadge ${total === 0 ? 'nil' : (total >= 25 ? 'ok' : 'fail')} t${t}tot">${total || '-'}</span></td>`;
+    if (uIdx === null) {
+      ScoreLogic.getUnitOffsets(t).forEach(({ unitIndex, start, count }) => {
+        const unit = units[unitIndex]; let raw = 0;
+        for (let i = 0; i < count; i++) {
+          const val = flatVals[start+i]??''; raw += Number(val)||0;
+          cells += `<td class="td-sub${t} sc${t}"><input type="number" class="sinput sub${t} ${t===2?'t2':''}" min="0" max="${Number((unit.items||[])[i]?.max)||0}" value="${val}" data-term="${t}" data-unit="${unitIndex}" data-item="${i}" oninput="calcSub(this,${t})"></td>`;
+        }
+        cells += `<td class="td-sc${t} sc${t} unit-total-${t}" data-unit="${unitIndex}">${ScoreLogic.calcScaled(raw,ScoreLogic.getUnitRawMax(t,unitIndex),Number(unit.max)||0)||'-'}</td>`;
+      });
+    } else if (uIdx === -1) {
+      // สอบ — แสดงแค่ช่องเก็บรวม ไม่มี input งาน
+    } else {
+      const unit = units[uIdx]||{}, items = unit.items||[];
+      const offset = ScoreLogic.getUnitOffsets(t).find(o=>o.unitIndex===uIdx);
+      const base = offset?.start ?? 0; let raw = 0;
+      items.forEach((item,i) => {
+        const val = flatVals[base+i]??''; raw += Number(val)||0;
+        cells += `<td class="td-sub${t} sc${t}"><input type="number" class="sinput sub${t} ${t===2?'t2':''}" min="0" max="${Number(item.max)||0}" value="${val}" data-term="${t}" data-unit="${uIdx}" data-item="${i}" oninput="calcSub(this,${t})"></td>`;
+      });
+      if (items.length>0) cells += `<td class="td-sc${t} sc${t} unit-total-${t}" data-unit="${uIdx}">${ScoreLogic.calcScaled(raw,ScoreLogic.getUnitRawMax(t,uIdx),Number(unit.max)||0)||'-'}</td>`;
+    }
+    cells += `<td class="td-sc${t}"><span class="t${t}sc">${keep||'-'}</span></td>
+              <td>${mkExamInput(s)}</td>
+              <td>${totalBadge}</td>`;
     return { cells, keep, exam, total };
   };
 
-  const activeTerm = App.activeTerm || 1;
-
   $('gtBody').innerHTML = App.students.map((s, idx) => {
-    const st  = s.stats || {};
-    const tc  = buildTermCells(activeTerm, s);
-    const finalScore = tc.total;
-
+    const st = s.stats||{}, tc = buildCells(s), fs = tc.total;
     return `<tr data-sid="${s.studentId}">
-      <td class="s-c0">${idx + 1}</td>
-      <td class="s-c1">${s.studentId}</td>
+      <td class="s-c0">${idx+1}</td><td class="s-c1">${s.studentId}</td>
       <td class="s-c2"><div class="d-flex justify-content-between align-items-center gap-1"><span>${s.name}</span><div class="d-flex gap-1">
-        <button class="btn-sm" style="padding:2px 7px;font-size:0.72rem;background:#ede9fe;color:#6d28d9;border:1px solid #c4b5fd;" onclick="printRowPDF('${s.studentId}','term1')">T1</button>
-        <button class="btn-sm" style="padding:2px 8px;font-size:0.75rem;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;" onclick="printRowPDF('${s.studentId}','year')">🖨️</button>
+        <button class="btn-sm" style="padding:2px 7px;font-size:.72rem;background:#ede9fe;color:#6d28d9;border:1px solid #c4b5fd;" onclick="printRowPDF('${s.studentId}','term1')">T1</button>
+        <button class="btn-sm" style="padding:2px 8px;font-size:.75rem;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;" onclick="printRowPDF('${s.studentId}','year')">🖨️</button>
       </div></div></td>
       <td><span class="sp p">ม ${st.present||0}</span> <span class="sp a">ข ${st.absent||0}</span> <span class="sp l">ล ${st.leave||0}</span></td>
       ${tc.cells}
-      <td><span class="gbadge ${finalScore===0?'nil':finalScore<(ScoreLogic.getTarget()*0.5)?'fail':'ok'} gtot">${finalScore||'-'}</span></td>
-      <td style="background:#f8fafc;"><span class="gbadge ${finalScore===0?'nil':finalScore<(ScoreLogic.getTarget()*0.5)?'fail':'ok'} final-grade" style="font-size:1.05rem;border:2px solid #c7d2fe;min-width:48px;">${finalScore===0?'-':Utils.calcGradeFrontend(finalScore)}</span></td>
+      <td><span class="gbadge ${fs===0?'nil':fs<tgt*0.5?'fail':'ok'} gtot">${fs||'-'}</span></td>
+      <td style="background:#f8fafc;"><span class="gbadge ${fs===0?'nil':fs<tgt*0.5?'fail':'ok'} final-grade" style="font-size:1.05rem;border:2px solid #c7d2fe;min-width:48px;">${fs===0?'-':Utils.calcGradeFrontend(fs)}</span></td>
     </tr>`;
   }).join('');
   refreshAllScoreInputStates($('gtBody'));
