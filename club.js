@@ -505,11 +505,11 @@ function _renderClubActivity() {
   }).join('');
 
   wrap.innerHTML = `
-    ${nTopics > 0 ? `
+    ${nDates > 0 ? `
     <div style="margin-bottom:14px;">
       <div style="font-weight:700;font-size:.86rem;color:#92400e;padding:8px 12px;
                   background:#fef3c7;border-radius:8px 8px 0 0;border:1px solid #fde68a;border-bottom:none;">
-        📝 บันทึกหัวข้อกิจกรรม (${nTopics} ครั้ง)
+        📝 บันทึกหัวข้อกิจกรรม (${nDates} ครั้ง)
       </div>
       <div style="border:1px solid #fde68a;border-radius:0 0 8px 8px;overflow:auto;max-height:200px;">
         <table style="width:100%;border-collapse:collapse;font-size:.84rem;">
