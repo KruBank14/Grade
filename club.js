@@ -107,11 +107,11 @@ async function loadClubRealAttendance() {
   try {
     await Promise.all(
       Object.entries(byClass).map(async ([cls, sids]) => {
-        // หา classroom key จริง (มัธยมอาจเป็น "ม.1 เทอม 1")
-        const subsKey = Object.keys(App.subs || {}).find(k =>
-          k === cls || k.startsWith(cls + ' ')
-        );
-        const classroomKey = subsKey || cls;
+        // ดึง classroomKey จากสมาชิกคนแรกของชั้นนั้น
+        const firstMember = Club.members.find(m => m.classroom === cls);
+        const classroomKey = firstMember?.classroomKey ||
+          Object.keys(App.subs || {}).find(k => k === cls || k.startsWith(cls + ' ')) ||
+          cls;
         try {
           const res = await api('getAttendanceDetail', { year, classroom: classroomKey });
           // res = { studentId: { 'dd/mm/yyyy': 'ม'|'ข'|'ล' } }
@@ -173,7 +173,8 @@ async function loadAllClubStudents() {
         if (!subs.length) return { cls, students: [], error: null };
         try {
           const res = await api('getGrades', { year, classroom: classroomKey, subject: subs[0] });
-          return { cls, students: (res.students || []).map(s => ({ studentId: s.studentId, name: s.name, inOtherClub: false, clubName: '' })), error: null };
+          // เก็บ classroomKey จริง (เช่น "ม.1 เทอม 1") ไว้ใน _classroomKey สำหรับส่ง GAS ตอน save
+          return { cls, students: (res.students || []).map(s => ({ studentId: s.studentId, name: s.name, inOtherClub: false, clubName: '', _classroomKey: classroomKey })), error: null };
         } catch(e) {
           return { cls, students: [], error: e.message || 'โหลดไม่สำเร็จ' };
         }
@@ -214,25 +215,29 @@ async function loadSavedClub() {
   Utils.showLoading('โหลดข้อมูลชุมนุม...');
   try {
     const savedResults = await Promise.all(
-      classes.map(cls =>
-        api('getClubsByClassroom', { year, classroom: cls, term: t })
-          .then(res => ({ cls, students: res.students || [] }))
-          .catch(() => ({ cls, students: [] }))
-      )
+      classes.map(cls => {
+        // หา classroomKey จริง (มัธยม "ม.1" → "ม.1 เทอม 1")
+        const subsKey = Object.keys(App.subs || {}).find(k => k === cls || k.startsWith(cls + ' '));
+        const classroomKey = subsKey || cls;
+        return api('getClubsByClassroom', { year, classroom: classroomKey, term: t })
+          .then(res => ({ cls, classroomKey, students: res.students || [] }))
+          .catch(() => ({ cls, classroomKey, students: [] }));
+      })
     );
 
     // จัดกลุ่มตามชื่อชุมนุม (อาจมีหลายชุมนุมในโรงเรียน)
     const clubGroups = {}; // { clubName: [ {studentId, name, classroom, result} ] }
 
-    savedResults.forEach(({ cls, students }) => {
+    savedResults.forEach(({ cls, classroomKey, students }) => {
       students.forEach(s => {
         if (s.clubName) {
           if (!clubGroups[s.clubName]) clubGroups[s.clubName] = [];
           clubGroups[s.clubName].push({
-            studentId: s.studentId,
-            name:      s.name,
-            classroom: cls,
-            result:    s.result || ''
+            studentId:    s.studentId,
+            name:         s.name,
+            classroom:    cls,
+            classroomKey: classroomKey || cls, // key จริงสำหรับ GAS
+            result:       s.result || ''
           });
         }
       });
@@ -254,7 +259,7 @@ async function loadSavedClub() {
       ? Club.clubName
       : clubNames.sort((a, b) => clubGroups[b].length - clubGroups[a].length)[0];
 
-    const savedMembers    = clubGroups[targetClub].map(s => ({ studentId: s.studentId, name: s.name, classroom: s.classroom }));
+    const savedMembers    = clubGroups[targetClub].map(s => ({ studentId: s.studentId, name: s.name, classroom: s.classroom, classroomKey: s.classroomKey || s.classroom }));
     const savedResultMap  = {};
     clubGroups[targetClub].forEach(s => { if (s.result) savedResultMap[s.studentId] = s.result; });
     const savedClubName   = targetClub;
@@ -545,7 +550,10 @@ function toggleClubMember(sid, name, classroom) {
     delete Club.attMap[sid];
     delete Club.resultMap[sid];
   } else {
-    Club.members.push({ studentId: sid, name, classroom });
+    // หา classroomKey จริงจาก allClassStudents
+    const stuInfo = (Club.allClassStudents[classroom] || []).find(s => s.studentId === sid);
+    const classroomKey = stuInfo?._classroomKey || classroom;
+    Club.members.push({ studentId: sid, name, classroom, classroomKey });
   }
   _renderClubMain();
   if (Club.loaded) _renderClubStudentPicker();
@@ -807,7 +815,7 @@ async function saveClubData() {
   const year    = $('gYear').value;
   const records = Club.members.map(m => ({
     studentId: m.studentId,
-    classroom: m.classroom,
+    classroom: m.classroomKey || m.classroom, // ใช้ key จริง เช่น "ม.1 เทอม 1"
     attended:  (Club.attMap[m.studentId] || []).filter(v => v === 'ป').length,
     result:    Club.resultMap[m.studentId] || 'ไม่ผ่าน',
     attArray:  Club.attMap[m.studentId]    || []
