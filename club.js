@@ -297,39 +297,47 @@ async function loadSavedClub() {
     const myName = (App.user && App.user.name) ? App.user.name.trim() : '';
 
     // ถ้าครูบันทึกชุมนุมไว้แล้ว จะมี teacher field ใน attRes
-    // ดึง teacher ของทุกชุมนุมก่อน
+    // ── เลือกชุมนุมที่ตรงกับครูที่ล็อกอิน ──
+    // ดึง teacher ของแต่ละชุมนุมจาก attArray ที่โหลดมาแล้ว
+    // (teacher ถูกเก็บใน row ของนักเรียนแต่ละคน ดึงจากสมาชิกคนแรก)
     const clubTeacherMap = {}; // { clubName: teacher }
     await Promise.all(
       clubNames.map(async cName => {
-        const firstMember = clubGroups[cName][0];
-        if (!firstMember) return;
+        // ยิง getClubAttendanceDetail เพื่อดึง teacher ของชุมนุมนั้น
+        const members = clubGroups[cName].slice(0, 1); // ดึงแค่คนแรก
+        if (!members.length) return;
         try {
           const attRes = await api('getClubAttendanceDetail', {
             year,
-            members: [{ studentId: firstMember.studentId, classroom: firstMember.classroomKey || firstMember.classroom }],
+            members: members.map(m => ({ studentId: m.studentId, classroom: m.classroomKey || m.classroom })),
             term: t
           });
-          if (attRes.teacher) clubTeacherMap[cName] = attRes.teacher;
-          else clubTeacherMap[cName] = '';
+          clubTeacherMap[cName] = attRes.teacher || '';
         } catch(e) { clubTeacherMap[cName] = ''; }
       })
     );
 
-    // เลือกชุมนุมที่ตรงกับครูที่ล็อกอิน
+    // เลือกชุมนุมที่จะโหลด — เรียงลำดับความสำคัญ:
+    // 1. ชุมนุมที่ครูล็อกอินเป็นที่ปรึกษา
+    // 2. ชุมนุมที่ระบุไว้แล้ว (Club.clubName)
+    // 3. ชุมนุมที่มีสมาชิกมากที่สุด
     let targetClub = '';
-    if (Club.clubName && clubGroups[Club.clubName]) {
-      // ถ้ามี clubName อยู่แล้ว (เช่น reload) ให้ใช้อันนั้น
-      targetClub = Club.clubName;
-    } else if (myName) {
-      // หาชุมนุมที่ครูคนนี้เป็นที่ปรึกษา
+    if (myName) {
       targetClub = clubNames.find(cName => {
-        const t_ = clubTeacherMap[cName] || '';
-        return t_.includes(myName) || myName.includes(t_);
+        const teacher = clubTeacherMap[cName] || '';
+        return teacher && (teacher.includes(myName) || myName.includes(teacher));
       }) || '';
     }
-    // ถ้าหาไม่เจอ → เลือกชุมนุมที่มีสมาชิกมากที่สุด
+    if (!targetClub && Club.clubName && clubGroups[Club.clubName]) {
+      targetClub = Club.clubName;
+    }
+    // ถ้าหาชุมนุมของครูคนนี้ไม่เจอเลย → ไม่โหลด
     if (!targetClub) {
-      targetClub = clubNames.sort((a, b) => clubGroups[b].length - clubGroups[a].length)[0];
+      Utils.toast('ไม่พบชุมนุมที่คุณเป็นที่ปรึกษา');
+      _renderClubMain();
+      Utils.hideLoading();
+      if (document.getElementById('btnLoadSaved')) document.getElementById('btnLoadSaved').disabled = false;
+      return;
     }
 
     const savedMembers    = clubGroups[targetClub].map(s => ({ studentId: s.studentId, name: s.name, classroom: s.classroom, classroomKey: s.classroomKey || s.classroom }));
