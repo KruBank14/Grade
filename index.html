@@ -1786,13 +1786,17 @@ body{
           <div class="card" style="background:#f8fafc;">
             <div class="mini-title">สรุปคะแนน</div>
             <div class="score-mini-list">
-              <div class="score-mini-item"><span>เทอม 1 คะแนนเก็บ</span><span class="val" id="show_t1_keep">0</span></div>
+              <div class="score-mini-item" style="background:#ede9fe;border-radius:8px;padding:6px 10px;margin-bottom:4px;">
+                <span style="font-weight:800;color:#6d28d9;">เทอม 1 คะแนนเก็บ</span><span class="val" id="show_t1_keep">0</span>
+              </div>
               <div class="score-mini-item"><span>เทอม 1 คะแนนสอบ</span><span class="val" id="show_t1_exam">0</span></div>
-              <div class="score-mini-item"><span>เทอม 1 รวม</span><span class="val" id="show_t1_total">0</span></div>
-              <div id="t2AutoBlock">
-                <div class="score-mini-item"><span>เทอม 2 คะแนนเก็บ</span><span class="val" id="show_t2_keep">0</span></div>
+              <div class="score-mini-item" style="border-top:1px solid #e2e8f0;padding-top:6px;margin-top:2px;font-weight:700;"><span>เทอม 1 รวม</span><span class="val" id="show_t1_total">0</span></div>
+              <div id="t2AutoBlock" style="margin-top:10px;">
+                <div class="score-mini-item" style="background:#e0f2fe;border-radius:8px;padding:6px 10px;margin-bottom:4px;">
+                  <span style="font-weight:800;color:#0369a1;">เทอม 2 คะแนนเก็บ</span><span class="val" id="show_t2_keep">0</span>
+                </div>
                 <div class="score-mini-item"><span>เทอม 2 คะแนนสอบ</span><span class="val" id="show_t2_exam">0</span></div>
-                <div class="score-mini-item"><span>เทอม 2 รวม</span><span class="val" id="show_t2_total">0</span></div>
+                <div class="score-mini-item" style="border-top:1px solid #e2e8f0;padding-top:6px;margin-top:2px;font-weight:700;"><span>เทอม 2 รวม</span><span class="val" id="show_t2_total">0</span></div>
               </div>
             </div>
             <div class="unit-side-note mt-2">เก็บ = รวมคะแนนทุกหน่วย<br>สอบ = กำหนดในแท็บ "สอบ" ของแต่ละเทอม</div>
@@ -2194,4 +2198,4 @@ window.switchSettingsTab = function(tid, btn) {
 };
 </script>
 </body>
-</html> 
+</html>
