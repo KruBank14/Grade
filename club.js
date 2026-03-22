@@ -341,10 +341,16 @@ function _renderClubMain() {
       <div style="font-size:.88rem;font-weight:700;color:#92400e;margin-bottom:12px;">📋 บันทึกกิจกรรมชุมนุม ภาคเรียนที่ ${t}</div>
       <div id="clubActivitySection"></div>
       <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
-        <button class="btn-save w-100" onclick="saveClubData()"
-          style="background:linear-gradient(135deg,#d97706,#b45309);">
-          💾 บันทึกชุมนุม ภาคเรียน ${t}
-        </button>
+        <div style="display:flex;gap:8px;">
+          <button class="btn-save" style="flex:1;background:linear-gradient(135deg,#d97706,#b45309);"
+            onclick="saveClubData()">
+            💾 บันทึกชุมนุม ภาคเรียน ${t}
+          </button>
+          <button class="btn-pri" style="padding:8px 18px;background:linear-gradient(135deg,#0369a1,#0284c7);"
+            onclick="printClubReport()">
+            🖨️ พิมพ์รายงาน
+          </button>
+        </div>
       </div>
     </div>` : ''}
   `;
@@ -759,30 +765,217 @@ async function loadHomeroomClubView() {
   Utils.hideLoading();
 }
 
-async function printClubReport(term) {
-  const year = $('gYear').value, cls = $('gClass').value;
-  if (!cls) return Utils.toast('กรุณาเลือกชั้นก่อน', 'error');
-  Utils.showLoading('สร้างรายงาน...');
-  try {
-    const res     = await api('getClubsByClassroom', { year, classroom: cls, term }).catch(() => ({ students: [] }));
-    const profile = App.schoolProfile || {};
-    const rows    = (res.students||[]).map((s,i) =>
-      `<tr><td style="text-align:center;">${i+1}</td><td>${s.name}</td>
-       <td style="text-align:center;">${s.clubName||'-'}</td>
-       <td style="text-align:center;">${s.result||'-'}</td></tr>`
-    ).join('');
-    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
-      <style>body{font-family:Sarabun,sans-serif;padding:20px;}h3,h4{text-align:center;margin:4px 0;}
-      table{width:100%;border-collapse:collapse;margin-top:12px;}
-      th,td{border:1px solid #ccc;padding:6px 10px;font-size:14px;}th{background:#fef3c7;}
-      @media print{button{display:none;}}</style></head><body>
-      <h3>${profile.school_name||''}</h3>
-      <h4>สรุปชุมนุม ชั้น ${cls} ปีการศึกษา ${year} ภาคเรียนที่ ${term}</h4>
-      <table><thead><tr><th>ที่</th><th>ชื่อ-นามสกุล</th><th>ชุมนุม</th><th>ผล</th></tr></thead>
-      <tbody>${rows}</tbody></table>
-      <button onclick="window.print()" style="margin-top:16px;padding:8px 20px;cursor:pointer;">🖨️ พิมพ์</button>
-      </body></html>`;
-    const w = window.open('','_blank'); w.document.write(html); w.document.close(); w.print();
-  } catch(e) { Utils.toast(e.message,'error'); }
-  Utils.hideLoading();
+function printClubReport() {
+  const year    = $('gYear').value;
+  const profile = App.schoolProfile || {};
+  const schoolName   = profile.school_name   || 'โรงเรียน';
+  const directorName = profile.director_name || '..............................';
+  const actHeadName  = profile.academic_head_name || '..............................';
+  const t       = Club.term;
+  const MONTHS  = ['','ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+
+  if (!Club.members.length) return Utils.toast('ยังไม่มีสมาชิกชุมนุม', 'error');
+  if (!Club.dates.length)   return Utils.toast('ยังไม่พบวันกิจกรรม', 'error');
+
+  // sync ข้อมูลจากหน้าจอก่อน print
+  document.querySelectorAll('#clubAttBody tr[data-sid]').forEach(tr => {
+    const sid = tr.getAttribute('data-sid');
+    const att = [...tr.querySelectorAll('.club-day-cell')].map(c => c.getAttribute('data-flag') || 'ป');
+    const res = tr.querySelector('.club-result')?.value || 'ไม่ผ่าน';
+    Club.attMap[sid]    = att;
+    Club.resultMap[sid] = res;
+  });
+  const topics_   = [...(document.querySelectorAll('.club-topic') || [])].map(i => i.value);
+  const teachers_ = [...(document.querySelectorAll('.club-teacher-inp') || [])].map(i => i.value);
+
+  const termDates = Club.dates;
+  const nDates    = termDates.length;
+  const teacher   = Club.teacher || '..............................';
+
+  function fmtD(dStr) {
+    const p = dStr.split('/');
+    if (p.length !== 3) return dStr;
+    return parseInt(p[0]) + ' ' + MONTHS[parseInt(p[1])] + ' ' + p[2].slice(-2);
+  }
+
+  const rows = Club.members.map((m, i) => {
+    const att     = Club.attMap[m.studentId] || Array(nDates).fill('ป');
+    const nP      = att.filter(v => v === 'ป').length;
+    const nBase   = att.filter(v => v !== '-').length;
+    const result  = Club.resultMap[m.studentId] ||
+      (nBase > 0 && nP >= Math.ceil(nBase * 0.8) ? 'ผ่าน' : 'ไม่ผ่าน');
+    return { no: i+1, name: m.name, classroom: m.classroom, att, attended: nP, nBase, result };
+  });
+
+  const passCount = rows.filter(r => r.result === 'ผ่าน').length;
+  const failCount = rows.length - passCount;
+
+  // ── ปก ──
+  const pageCover = `<div class="page cover-page">
+    <div style="text-align:center;margin-top:10mm;margin-bottom:6mm;">
+      <img src="https://raw.githubusercontent.com/Bk14School/easygrade/refs/heads/main/logo-OBEC.png" style="width:90px;height:auto;">
+    </div>
+    <div style="text-align:center;font-size:22px;font-weight:bold;letter-spacing:1px;margin-bottom:4mm;">แบบบันทึกผลกิจกรรมชุมนุม</div>
+    <div style="text-align:center;font-size:17px;font-weight:bold;margin-bottom:8mm;">
+      ชุมนุม ${Club.clubName} &nbsp;|&nbsp; ภาคเรียนที่ ${t} &nbsp;|&nbsp; ปีการศึกษา ${year}
+    </div>
+    <div class="cover-info-box">
+      <div class="cover-row"><span class="cover-label">โรงเรียน</span><span class="cover-val">${schoolName}</span></div>
+      <div class="cover-row"><span class="cover-label">ชื่อชุมนุม</span><span class="cover-val cover-ul">${Club.clubName}</span></div>
+      <div class="cover-row"><span class="cover-label">ครูที่ปรึกษา</span><span class="cover-val cover-ul">${teacher}</span></div>
+      <div class="cover-row"><span class="cover-label">จำนวนสมาชิก</span><span class="cover-val">${rows.length} คน</span></div>
+    </div>
+    <table class="cover-stat">
+      <tr><th>จำนวนสมาชิกทั้งหมด</th><th>ผ่าน</th><th>ไม่ผ่าน</th><th>หมายเหตุ</th></tr>
+      <tr><td>${rows.length}</td><td>${passCount}</td><td>${failCount}</td><td></td></tr>
+    </table>
+    <div class="appr">
+      <div style="font-size:16px;font-weight:bold;text-align:center;margin-bottom:10px;">การอนุมัติผลการเรียน</div>
+      <div class="sf">
+        <div style="text-align:center;min-width:220px;">ลงชื่อ.......................................ครูที่ปรึกษา<br><div style="margin-top:8px;">( ${teacher} )</div></div>
+      </div>
+      <hr style="border:none;border-top:1px dashed #ccc;margin:10px 0;">
+      <div class="sign-block">
+        <div>ลงชื่อ.................................................................</div>
+        <div class="sign-name">หัวหน้างานกิจกรรมพัฒนาผู้เรียน</div>
+        <div class="sign-name">( ${actHeadName} )</div>
+      </div>
+      <hr style="border:none;border-top:1px dashed #ccc;margin:10px 0;">
+      <div style="text-align:center;margin-top:8px;">
+        <div style="font-weight:bold;font-size:15px;margin-bottom:8px;">เรียน เสนอเพื่อโปรดพิจารณาอนุมัติผลการเรียน</div>
+        <div style="display:flex;justify-content:center;gap:70px;margin:8px 0;font-size:14px;">
+          <span><span class="rc"></span> อนุมัติ</span><span><span class="rc"></span> ไม่อนุมัติ</span>
+        </div>
+      </div>
+      <div class="sign-block">
+        <div>ลงชื่อ.................................................................</div>
+        <div class="sign-name">ผู้อำนวยการ${schoolName}</div>
+        <div class="sign-name">( ${directorName} )</div>
+      </div>
+    </div>
+  </div>`;
+
+  // ── รายชื่อสมาชิก ──
+  const pageRoster = `<div class="page">
+    <div class="rh">ชุมนุม${Club.clubName} ภาคเรียนที่ ${t} ปีการศึกษา ${year}</div>
+    <div style="margin-left:15%;font-size:14px;margin-bottom:6px;">จำนวนสมาชิก..........${rows.length}..........คน</div>
+    <table><thead><tr>
+      <th style="width:40px;font-weight:normal;">ที่</th>
+      <th style="font-weight:normal;">ชื่อ – สกุล</th>
+      <th style="width:80px;font-weight:normal;">ชั้น</th>
+      <th style="width:35%;font-weight:normal;">หมายเหตุ</th>
+    </tr></thead><tbody>
+      ${rows.map(r => `<tr><td>${r.no}</td><td style="text-align:left;padding-left:15px;">${r.name}</td><td>${r.classroom}</td><td></td></tr>`).join('')}
+      ${Array(Math.max(0, 20 - rows.length)).fill('<tr><td><br></td><td></td><td></td><td></td></tr>').join('')}
+    </tbody></table>
+    <div class="sf" style="margin-top:30px;">
+      <div style="text-align:center;min-width:220px;">ลงชื่อ.......................................ครูที่ปรึกษา<br><div style="margin-top:10px;">( ${teacher} )</div></div>
+    </div>
+  </div>`;
+
+  // ── บันทึกกิจกรรม ──
+  const actRowCount = Math.max(nDates, 20);
+  const actRowsHtml = Array(actRowCount).fill(0).map((_, i) =>
+    `<tr>
+      <td style="height:26px;">${i+1}</td>
+      <td style="font-size:12px;">${termDates[i] ? fmtD(termDates[i]) : ''}</td>
+      <td style="text-align:left;padding-left:8px;font-size:12px;">${topics_[i] || ''}</td>
+      <td style="font-size:12px;">${teachers_[i] || teacher}</td>
+    </tr>`
+  ).join('');
+
+  const pageActivity = `<div class="page">
+    <div class="tc fw" style="font-size:16px;margin-bottom:6px;">บันทึกการจัดกิจกรรมชุมนุม${Club.clubName} ภาคเรียนที่ ${t}</div>
+    <table><thead><tr>
+      <th style="width:8%;font-weight:normal;">ครั้งที่</th>
+      <th style="width:14%;font-weight:normal;">วัน/เดือน/ปี</th>
+      <th style="font-weight:normal;">หัวข้อกิจกรรม</th>
+      <th style="width:22%;font-weight:normal;">ครูที่ปรึกษา</th>
+    </tr></thead>
+    <tbody>${actRowsHtml}</tbody></table>
+  </div>`;
+
+  // ── ตารางเช็คชื่อ (landscape) ──
+  const attDateHeaders = termDates.map(d => {
+    const p = d.split('/');
+    return `<th class="col-date"><div class="v-date">${parseInt(p[0])} ${MONTHS[parseInt(p[1])]} ${p[2].slice(-2)}</div></th>`;
+  }).join('');
+
+  const attRowsHtml = rows.map(r =>
+    `<tr>
+      <td>${r.no}</td>
+      <td class="col-name" style="text-align:left;">${r.name} <span style="font-size:8px;color:#666;">${r.classroom}</span></td>
+      ${r.att.slice(0, nDates).map(v => {
+        const lb = v==='ป' ? '<span style="color:#166534;font-weight:bold;">/</span>'
+                 : v==='ข' ? '<span style="color:#dc2626;font-weight:bold;">ข</span>'
+                 : v==='ล' ? '<span style="color:#ca8a04;font-weight:bold;">ล</span>'
+                 :           '<span style="color:#94a3b8;">-</span>';
+        return `<td style="text-align:center;border:1px solid #000;">${lb}</td>`;
+      }).join('')}
+      <td style="text-align:center;font-weight:bold;">${r.attended}</td>
+      <td style="text-align:center;font-weight:bold;color:#166534;">${r.result==='ผ่าน'?'✓':''}</td>
+      <td style="text-align:center;font-weight:bold;color:#dc2626;">${r.result!=='ผ่าน'?'✓':''}</td>
+    </tr>`
+  ).join('');
+
+  const pageAtt = `<div class="page att-page">
+    <div class="tc fw" style="font-size:13px;margin-bottom:3px;">การเข้าร่วมกิจกรรมชุมนุม${Club.clubName} ภาคเรียนที่ ${t}</div>
+    <div class="fw" style="margin-bottom:2px;font-size:12px;">ปีการศึกษา ${year} &nbsp; ครูที่ปรึกษา ${teacher}</div>
+    <div style="font-size:11px;margin-bottom:5px;">/ = มาเรียนปกติ &nbsp; ข = ขาดเรียน &nbsp; ล = ลา &nbsp; เกณฑ์ผ่าน ≥ 80%</div>
+    <table class="att-tbl"><thead><tr>
+      <th rowspan="2" class="col-no">ที่</th>
+      <th rowspan="2" class="col-name">ชื่อ – สกุล</th>
+      <th colspan="${nDates}" style="border:1px solid #000;font-size:10px;">วัน/เดือน/ปี ครั้งที่เข้าร่วมกิจกรรม</th>
+      <th rowspan="2" class="col-sum">รวม</th>
+      <th rowspan="2" class="col-pass">ผ่าน</th>
+      <th rowspan="2" class="col-pass">ไม่ผ่าน</th>
+    </tr><tr>${attDateHeaders}</tr></thead>
+    <tbody>${attRowsHtml}</tbody></table>
+  </div>`;
+
+  const css =
+    '@page{size:A4 portrait;margin:12mm;}' +
+    '@page att{size:A4 landscape;margin:6mm 7mm;}' +
+    "body{font-family:'Sarabun',sans-serif;font-size:14px;color:#000;margin:0;line-height:1.4;}" +
+    '.page{page-break-after:always;min-height:260mm;padding:8px 18px;}' +
+    '.cover-page{padding:0 20mm;box-sizing:border-box;}' +
+    '.cover-info-box{border:1.5px solid #555;border-radius:8px;padding:10px 16px;margin:0 auto 8mm;max-width:160mm;font-size:14px;line-height:2;}' +
+    '.cover-row{display:flex;align-items:baseline;gap:8px;}' +
+    '.cover-label{font-weight:bold;white-space:nowrap;min-width:80px;}' +
+    '.cover-val{flex:1;border-bottom:1px solid #999;padding-bottom:1px;}' +
+    '.cover-ul{border-bottom:1.5px solid #000 !important;}' +
+    '.cover-stat{width:80%;margin:0 auto 8mm;border-collapse:collapse;font-size:14px;}' +
+    '.cover-stat th,.cover-stat td{border:1px solid #000;padding:8px;text-align:center;}' +
+    '.cover-stat th{background:#f3f4f6;font-weight:bold;}' +
+    '.sign-block{text-align:center;margin:10px auto;font-size:14px;line-height:1.9;}' +
+    '.sign-name{font-size:13px;color:#222;}' +
+    '.att-page{page-break-after:always;page:att;padding:6px 10px;}' +
+    '.tc{text-align:center;}.fw{font-weight:bold;}' +
+    'table{width:100%;border-collapse:collapse;}' +
+    'th,td{border:1px solid #000;padding:3px 2px;text-align:center;}' +
+    '.appr{border:1.5px solid #000;border-radius:25px;padding:14px 18px;margin-top:12px;}' +
+    '.rc{display:inline-block;width:13px;height:13px;border:1.5px solid #000;border-radius:50%;vertical-align:middle;margin-right:5px;}' +
+    '.sf{display:flex;justify-content:space-around;flex-wrap:wrap;margin-top:14px;gap:8px;}' +
+    '.rh{border:1px solid #000;border-radius:8px;padding:8px;width:65%;margin:0 auto 10px;text-align:center;font-size:15px;font-weight:bold;}' +
+    '.att-tbl{font-size:9.5px;table-layout:fixed;width:100%;border-collapse:collapse;}' +
+    '.att-tbl th,.att-tbl td{border:1px solid #000;padding:0;text-align:center;overflow:hidden;line-height:1.2;}' +
+    '.att-tbl .col-no{width:18px;min-width:18px;}' +
+    '.att-tbl .col-name{width:130px;min-width:130px;text-align:left !important;padding-left:3px;white-space:nowrap;overflow:hidden;}' +
+    '.att-tbl .col-date{width:14px;min-width:14px;max-width:14px;}' +
+    '.att-tbl .col-sum{width:20px;min-width:20px;font-weight:bold;}' +
+    '.att-tbl .col-pass{width:20px;min-width:20px;}' +
+    ".att-tbl .v-date{writing-mode:vertical-rl;transform:rotate(180deg);font-size:8.5px;color:#c00;height:70px;white-space:nowrap;display:block;}";
+
+  const html = `<!DOCTYPE html><html lang="th"><head><meta charset="utf-8">
+    <title>รายงานชุมนุม_${Club.clubName}_${year}_เทอม${t}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>${css}</style></head><body>
+    ${pageCover}${pageRoster}${pageActivity}${pageAtt}
+    </body></html>`;
+
+  const win = window.open('', '_blank');
+  if (!win) return Utils.toast('กรุณาอนุญาต Popup', 'error');
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
 }
