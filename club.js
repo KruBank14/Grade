@@ -188,6 +188,37 @@ async function loadAllClubStudents() {
       if (error) Club.loadErrors[cls] = error;
     });
 
+    // ── ดึงข้อมูลว่าใครอยู่ชุมนุมอะไรแล้ว ──
+    // ยิง getClubsByClassroom ทุกชั้นพร้อมกัน แล้ว mark inOtherClub + clubName
+    Utils.showLoading('ตรวจสอบข้อมูลชุมนุม...');
+    try {
+      const clubResults = await Promise.all(
+        classes.map(cls => {
+          const subsKey = Object.keys(App.subs || {}).find(k => k === cls || k.startsWith(cls + ' '));
+          const classroomKey = subsKey || cls;
+          return api('getClubsByClassroom', { year, classroom: classroomKey, term: t })
+            .then(res => ({ cls, students: res.students || [] }))
+            .catch(() => ({ cls, students: [] }));
+        })
+      );
+      // สร้าง map { studentId: clubName }
+      const clubMap = {};
+      clubResults.forEach(({ students }) => {
+        students.forEach(s => {
+          if (s.clubName) clubMap[s.studentId] = s.clubName;
+        });
+      });
+      // mark inOtherClub และ clubName ในทุกชั้น
+      classes.forEach(cls => {
+        (Club.allClassStudents[cls] || []).forEach(s => {
+          if (clubMap[s.studentId]) {
+            s.inOtherClub = true;
+            s.clubName    = clubMap[s.studentId];
+          }
+        });
+      });
+    } catch(e) { /* ถ้าดึงไม่ได้ — ข้ามไป */ }
+
     const successCount = results.filter(r => !r.error && r.students.length > 0).length;
     const failCount    = results.filter(r => !!r.error).length;
     const firstCls = classes.find(c => (Club.allClassStudents[c] || []).length > 0) || classes[0];
@@ -525,15 +556,24 @@ function _renderClubStudentPicker() {
     chipsHtml = `<div style="display:flex;flex-wrap:wrap;gap:6px;padding:6px 0;">` +
       students.map(s => {
         const inMyClub = Club.members.some(m => m.studentId === s.studentId);
-        const inOther  = s.inOtherClub && !inMyClub;
+        // อยู่ชุมนุมอื่น = มีชุมนุมแล้ว และไม่ใช่ชุมนุมนี้ และไม่ได้เลือกอยู่ในชุมนุมนี้
+        const inOther  = s.inOtherClub && !inMyClub && s.clubName !== Club.clubName;
         const bg     = inMyClub ? '#d1fae5' : inOther ? '#f3f4f6' : '#fff';
         const border = inMyClub ? '#6ee7b7' : inOther ? '#e5e7eb' : '#d1d5db';
         const color  = inMyClub ? '#065f46' : inOther ? '#9ca3af' : '#374151';
-        const click  = inOther ? '' : `toggleClubMember('${s.studentId}','${s.name.replace(/'/g,"\\'")}','${activeCls}')`;
-        return `<div onclick="${click}" style="display:inline-flex;align-items:center;gap:3px;padding:4px 10px;
-          border-radius:20px;border:1px solid ${border};background:${bg};font-size:12px;color:${color};
-          cursor:${inOther?'not-allowed':'pointer'};user-select:none;${inOther?'opacity:.6;':''}">
-          ${inMyClub?'✓ ':''}${s.name}${inOther?` <span style="font-size:10px;color:#9ca3af;">(${s.clubName})</span>`:''}
+        const click  = inOther ? '' : `toggleClubMember('${s.studentId}','${s.name.replace(/'/g,"\'")}','${activeCls}')`;
+        // badge แสดงชื่อชุมนุม
+        const badge  = inOther
+          ? `<span style="font-size:10px;background:#e5e7eb;color:#6b7280;padding:1px 5px;border-radius:8px;margin-left:3px;white-space:nowrap;">${s.clubName}</span>`
+          : inMyClub && Club.clubName
+            ? `<span style="font-size:10px;background:#bbf7d0;color:#166534;padding:1px 5px;border-radius:8px;margin-left:3px;white-space:nowrap;">${Club.clubName}</span>`
+            : '';
+        return `<div onclick="${click}"
+          title="${inOther ? 'อยู่ชุมนุม ' + s.clubName + ' แล้ว' : ''}"
+          style="display:inline-flex;align-items:center;gap:2px;padding:4px 10px;
+            border-radius:20px;border:1px solid ${border};background:${bg};font-size:12px;color:${color};
+            cursor:${inOther?'not-allowed':'pointer'};user-select:none;${inOther?'opacity:.55;':''}">
+          ${inMyClub?'✓ ':''}${s.name}${badge}
         </div>`;
       }).join('') + `</div>`;
   }
