@@ -3,19 +3,31 @@
 // =====================================================
 // ทุกวิชามี 1 ชีต กรอกได้ทั้งเทอม 1 และ 2
 //
-// วิชาต่อเนื่อง (seqNums):
-//   - ชีตชื่อ "เทคโนโลยี" (ไม่มีเลขท้าย)
-//   - เก็บ seqNums: { t1: 5, t2: 6 } ใน __CONFIG__
-//   - ปพ.5/ปพ.6 เทอม 1 → แสดง "เทคโนโลยี 5"
-//   - ปพ.5/ปพ.6 เทอม 2 → แสดง "เทคโนโลยี 6"
-//   - วิชาทั่วไปไม่มี seqNums → แสดงชื่อเดิม
+// วิชาต่อเนื่อง (isSeq):
+//   - เก็บ flag isSeq = true ใน __CONFIG__
+//   - เลขต่อเนื่องคำนวณจากชั้น ไม่ต้องกรอกรายวิชา:
+//       ม.1 → เทอม 1 = เลขคี่ลำดับที่ 1 = 1, เทอม 2 = 2
+//       ม.2 → เทอม 1 = 3, เทอม 2 = 4
+//       ม.3 → เทอม 1 = 5, เทอม 2 = 6
+//   - ปพ.5/ปพ.6 เทอม 1 → "เทคโนโลยี 1" (ม.1), "เทคโนโลยี 5" (ม.3)
+//   - ปพ.5/ปพ.6 เทอม 2 → "เทคโนโลยี 2" (ม.1), "เทคโนโลยี 6" (ม.3)
+//   - ปพ.5/ปพ.6 ทั้งปี  → "เทคโนโลยี" (ไม่มีเลข)
 // =====================================================
+
+// ── เลขต่อเนื่องของแต่ละชั้น ──────────────────────────
+// ม.1 = 1/2, ม.2 = 3/4, ม.3 = 5/6
+// ป.x ไม่มีวิชาต่อเนื่อง (คืน null)
+const CLASS_SEQ_NUMS = {
+  'ม.1': { t1: 1, t2: 2 },
+  'ม.2': { t1: 3, t2: 4 },
+  'ม.3': { t1: 5, t2: 6 }
+};
 
 const SubjectMgr = {
   cls:      '',
-  subjects: [],   // [{ name, seqNums }]
-                  //   seqNums = null (วิชาทั่วไป)
-                  //   seqNums = { t1: 5, t2: 6 } (วิชาต่อเนื่อง)
+  subjects: [],   // [{ name, isSeq }]
+                  //   isSeq = false  → วิชาทั่วไป
+                  //   isSeq = true   → วิชาต่อเนื่อง (เลขคำนวณจากชั้น)
   dirty:    false,
 
   // ── เริ่มต้น ──
@@ -28,13 +40,13 @@ const SubjectMgr = {
   },
 
   // ── โหลดวิชาจาก App.subs ──
-  // Auto-detect วิชาต่อเนื่อง: ชื่อที่มีเลขท้ายคู่ต่อเนื่องกัน
-  // เช่น "เทคโนโลยี 5","เทคโนโลยี 6" → { name:"เทคโนโลยี", seqNums:{t1:5,t2:6} }
+  // Auto-detect วิชาต่อเนื่อง: ชื่อที่มีเลขท้ายคี่/คู่ตรงกับชั้น
+  // เช่น ม.3 มี "เทคโนโลยี 5","เทคโนโลยี 6" → { name:"เทคโนโลยี", isSeq:true }
   loadClass(cls) {
     this.cls   = cls;
     this.dirty = false;
     const raw  = (App.subs && App.subs[cls]) ? [...App.subs[cls]] : [];
-    this.subjects = _smDetectSeq_(raw);
+    this.subjects = _smDetectSeq_(raw, cls);
     this.render();
   },
 
@@ -43,6 +55,9 @@ const SubjectMgr = {
     const box = $('smSubjectList');
     if (!box) return;
 
+    const seqNums   = CLASS_SEQ_NUMS[this.cls];
+    const hasSeqCls = !!seqNums; // ชั้นนี้รองรับวิชาต่อเนื่องหรือไม่
+
     if (!this.subjects.length) {
       box.innerHTML = `<div class="text-center text-muted py-4" style="font-size:.85rem;">ยังไม่มีวิชาในชั้นนี้</div>`;
       this._updateDirtyUI();
@@ -50,67 +65,63 @@ const SubjectMgr = {
     }
 
     box.innerHTML = this.subjects.map((s, i) => {
-      const isSeq  = !!s.seqNums;
-      const badge  = isSeq
-        ? `<span class="sm-badge seq" title="เทอม 1 = ${s.name} ${s.seqNums.t1} / เทอม 2 = ${s.name} ${s.seqNums.t2}">
-             🔢 ${s.seqNums.t1}/${s.seqNums.t2}
+      const badge = s.isSeq && seqNums
+        ? `<span class="sm-badge seq" title="เทอม 1 = ${s.name} ${seqNums.t1} | เทอม 2 = ${s.name} ${seqNums.t2}">
+             🔢 ${seqNums.t1}/${seqNums.t2}
            </span>`
         : '';
+
+      const typeBtn = hasSeqCls
+        ? s.isSeq
+          ? `<button class="sm-btn-type" onclick="SubjectMgr.toggleSeq(${i})" title="เปลี่ยนเป็นวิชาทั่วไป">↩ ทั่วไป</button>`
+          : `<button class="sm-btn-type" onclick="SubjectMgr.toggleSeq(${i})" title="ตั้งเป็นวิชาต่อเนื่อง">↪ ต่อเนื่อง</button>`
+        : '';
+
       return `<div class="sm-row" draggable="true" data-idx="${i}">
         <span class="sm-drag" title="ลากเพื่อเรียงลำดับ">⠿</span>
         <span class="sm-num">${i + 1}</span>
         <span class="sm-name">${_smEsc_(s.name)}</span>
         ${badge}
         <div class="sm-actions">
-          ${isSeq
-            ? `<button class="sm-btn-seq" onclick="SubjectMgr.editSeq(${i})" title="แก้ไขเลขต่อเนื่อง">✏️ เลข ${s.seqNums.t1}/${s.seqNums.t2}</button>
-               <button class="sm-btn-type" onclick="SubjectMgr.removeSeq(${i})" title="เปลี่ยนเป็นวิชาทั่วไป">↩ ทั่วไป</button>`
-            : `<button class="sm-btn-type" onclick="SubjectMgr.addSeq(${i})" title="ตั้งเป็นวิชาต่อเนื่อง">↪ ต่อเนื่อง</button>`}
+          ${typeBtn}
           <button class="sm-btn-del" onclick="SubjectMgr.deleteSubject(${i})">🗑</button>
         </div>
       </div>`;
     }).join('');
 
+    // แสดง hint เลขต่อเนื่องของชั้น
+    const hint = $('smSeqHint');
+    if (hint) {
+      if (seqNums) {
+        const seqSubjects = this.subjects.filter(s => s.isSeq);
+        hint.style.display = '';
+        hint.innerHTML = `🔢 ชั้น <b>${this.cls}</b> — วิชาต่อเนื่อง: เทอม 1 ใช้เลข <b>${seqNums.t1}</b>, เทอม 2 ใช้เลข <b>${seqNums.t2}</b>` +
+          (seqSubjects.length ? ` &nbsp;|&nbsp; มีวิชาต่อเนื่อง ${seqSubjects.length} วิชา` : '');
+      } else {
+        hint.style.display = 'none';
+      }
+    }
+
     this._initDrag(box);
     this._updateDirtyUI();
   },
 
-  // ── กำหนดเลขต่อเนื่องให้วิชา ──
-  addSeq(idx) {
-    const s    = this.subjects[idx];
-    const inp  = prompt(
-      `กำหนดเลขต่อเนื่องสำหรับ "${s.name}"\n\n` +
-      `รูปแบบ: เลขเทอม1/เลขเทอม2  เช่น 5/6 หรือ 1/2\n` +
-      `(เลขคี่=เทอม 1, เลขคู่=เทอม 2)`,
-      _smDefaultSeqNums_(this.cls, s.name)
-    );
-    if (!inp) return;
-    const nums = _smParseSeqInput_(inp);
-    if (!nums) return Utils.toast('รูปแบบไม่ถูกต้อง ใช้ เช่น 5/6', 'error');
-    this.subjects[idx] = { ...s, seqNums: nums };
-    this.dirty = true;
-    this.render();
-    Utils.toast(`✅ "${s.name}" เทอม 1 = ${nums.t1}, เทอม 2 = ${nums.t2}`);
-  },
+  // ── toggle isSeq ──
+  toggleSeq(idx) {
+    const s      = this.subjects[idx];
+    const seqNums = CLASS_SEQ_NUMS[this.cls];
+    if (!seqNums) return Utils.toast('ชั้นนี้ไม่รองรับวิชาต่อเนื่อง', 'error');
 
-  // ── แก้ไขเลขต่อเนื่อง ──
-  editSeq(idx) {
-    const s   = this.subjects[idx];
-    const cur = `${s.seqNums.t1}/${s.seqNums.t2}`;
-    const inp = prompt(`แก้ไขเลขต่อเนื่องของ "${s.name}" (ปัจจุบัน: ${cur})`, cur);
-    if (!inp) return;
-    const nums = _smParseSeqInput_(inp);
-    if (!nums) return Utils.toast('รูปแบบไม่ถูกต้อง ใช้ เช่น 5/6', 'error');
-    this.subjects[idx] = { ...s, seqNums: nums };
-    this.dirty = true;
-    this.render();
-  },
-
-  // ── เอาเลขต่อเนื่องออก ──
-  removeSeq(idx) {
-    const s = this.subjects[idx];
-    if (!confirm(`เปลี่ยน "${s.name}" เป็นวิชาทั่วไป (ไม่มีเลขต่อเนื่อง)?`)) return;
-    this.subjects[idx] = { name: s.name, seqNums: null };
+    if (s.isSeq) {
+      if (!confirm(`เปลี่ยน "${s.name}" เป็นวิชาทั่วไป?\n(จะไม่มีเลขต่อเนื่องในปพ.5/ปพ.6)`)) return;
+    } else {
+      if (!confirm(
+        `ตั้ง "${s.name}" เป็นวิชาต่อเนื่อง?\n\n` +
+        `ปพ.6 เทอม 1 → "${s.name} ${seqNums.t1}"\n` +
+        `ปพ.6 เทอม 2 → "${s.name} ${seqNums.t2}"`
+      )) return;
+    }
+    this.subjects[idx] = { ...s, isSeq: !s.isSeq };
     this.dirty = true;
     this.render();
   },
@@ -128,12 +139,11 @@ const SubjectMgr = {
   addSubject() {
     const nameEl = $('smNewName');
     if (!nameEl) return;
-    // ตัดเลขท้ายออกเสมอ (ชีตใช้ชื่อ base)
     const name = nameEl.value.trim().replace(/\s+\d+\s*$/, '').trim();
-    if (!name)           return Utils.toast('กรุณากรอกชื่อวิชา', 'error');
+    if (!name)            return Utils.toast('กรุณากรอกชื่อวิชา', 'error');
     if (name.length > 80) return Utils.toast('ชื่อวิชายาวเกินไป', 'error');
     if (this.subjects.find(s => s.name === name)) return Utils.toast(`วิชา "${name}" มีอยู่แล้ว`, 'error');
-    this.subjects.push({ name, seqNums: null });
+    this.subjects.push({ name, isSeq: false });
     nameEl.value = '';
     this.dirty   = true;
     this.render();
@@ -147,29 +157,27 @@ const SubjectMgr = {
     const year = ($('smYear') ? $('smYear').value : '').trim();
     if (!year || Number(year) < 2560) return Utils.toast('กรุณาระบุปีการศึกษาที่ถูกต้อง', 'error');
 
+    const seqNums   = CLASS_SEQ_NUMS[this.cls] || null;
+    const seqSubjects = this.subjects.filter(s => s.isSeq).map(s => s.name);
     const subjectNames = this.subjects.map(s => s.name);
-    // seqMap: { "เทคโนโลยี": { t1: 5, t2: 6 }, ... }
-    const seqMap = {};
-    this.subjects.forEach(s => { if (s.seqNums) seqMap[s.name] = s.seqNums; });
 
     if (!confirm(
       `บันทึกรายวิชาของ "${this.cls}" ปี ${year}?\n\n` +
       `${subjectNames.length} วิชา:\n` +
       `${this.subjects.map((s, i) => {
-        const seq = s.seqNums ? ` [ต่อเนื่อง ${s.seqNums.t1}/${s.seqNums.t2}]` : '';
+        const seq = s.isSeq && seqNums ? ` [ต่อเนื่อง เทอม1=${seqNums.t1}/เทอม2=${seqNums.t2}]` : '';
         return `  ${i + 1}. ${s.name}${seq}`;
       }).join('\n')}\n\n` +
-      `⚠️ วิชาใหม่ → สร้างชีตในไฟล์คะแนน\n` +
-      `⚠️ วิชาที่ลบ → ลบชีต (ข้อมูลหาย)`
+      `⚠️ วิชาใหม่ → สร้างชีต  |  วิชาที่ลบ → ลบชีต (ข้อมูลหาย)`
     )) return;
 
     Utils.showLoading('กำลังบันทึกและ sync ชีต...');
     try {
       const result = await api('saveSubjectsTemplate', {
-        classroom: this.cls,
-        subjects:  subjectNames,
-        seqMap:    seqMap,
-        year:      year
+        classroom:    this.cls,
+        subjects:     subjectNames,
+        seqSubjects:  seqSubjects, // รายชื่อวิชาที่เป็น sequence
+        year:         year
       });
 
       // อัปเดต App.subs ในหน่วยความจำ
@@ -229,59 +237,31 @@ const SubjectMgr = {
   }
 };
 
-// ── Auto-detect วิชาต่อเนื่องจากรายชื่อดิบ ──
-// เช่น ["เทคโนโลยี 5","เทคโนโลยี 6"] → [{ name:"เทคโนโลยี", seqNums:{t1:5,t2:6} }]
-function _smDetectSeq_(rawList) {
+// ── Auto-detect วิชาต่อเนื่องจากรายชื่อดิบ + ชั้น ──────
+// ถ้า App.subs ยังมีเลขท้าย (ข้อมูลเก่า) → detect จากเลขที่ตรงกับ CLASS_SEQ_NUMS ของชั้น
+function _smDetectSeq_(rawList, cls) {
+  const seqNums = CLASS_SEQ_NUMS[cls];
   const result  = [];
   const seen    = new Set();
-  // จัดกลุ่มตาม base name
-  const groups  = {}; // { base: [{ name, num }] }
+
   for (const raw of rawList) {
     const name = String(raw).trim();
-    const m    = name.match(/^(.+?)\s+(\d+)\s*$/);
+    // มีเลขท้าย?
+    const m = name.match(/^(.+?)\s+(\d+)\s*$/);
     if (m) {
       const base = m[1].trim(), num = parseInt(m[2]);
-      if (!groups[base]) groups[base] = [];
-      groups[base].push({ name, num });
+      if (seen.has(base)) continue; // de-duplicate
+      // ตรวจว่าเลขนี้ตรงกับ seqNums ของชั้นหรือไม่
+      const isSeq = seqNums && (num === seqNums.t1 || num === seqNums.t2);
+      seen.add(base);
+      result.push({ name: base, isSeq: !!isSeq });
     } else {
-      // วิชาไม่มีเลข
-      if (!seen.has(name)) { seen.add(name); result.push({ name, seqNums: null }); }
+      if (seen.has(name)) continue;
+      seen.add(name);
+      result.push({ name, isSeq: false });
     }
-  }
-  // แปลง groups → วิชาต่อเนื่อง
-  // ถ้ามีแค่ 1 ตัว (เลขเดียว) → treat เป็นวิชาทั่วไป base
-  for (const [base, items] of Object.entries(groups)) {
-    if (seen.has(base)) continue;
-    seen.add(base);
-    if (items.length >= 2) {
-      // หาเลขคี่ (t1) และเลขคู่ (t2)
-      const odd  = items.find(x => x.num % 2 === 1);
-      const even = items.find(x => x.num % 2 === 0);
-      if (odd && even) {
-        result.push({ name: base, seqNums: { t1: odd.num, t2: even.num } });
-        continue;
-      }
-    }
-    // fallback: วิชาทั่วไปชื่อ base
-    result.push({ name: base, seqNums: null });
   }
   return result;
-}
-
-// ── แนะนำเลขเริ่มต้นตามชั้น ──
-function _smDefaultSeqNums_(cls, subjectName) {
-  // ม.1→1/2, ม.2→3/4, ม.3→5/6 (default pattern)
-  const classMap = { 'ม.1':'1/2', 'ม.2':'3/4', 'ม.3':'5/6' };
-  return classMap[cls] || '1/2';
-}
-
-// ── parse input "5/6" หรือ "5, 6" หรือ "5 6" ──
-function _smParseSeqInput_(inp) {
-  const m = String(inp).match(/(\d+)\s*[\/,\s]\s*(\d+)/);
-  if (!m) return null;
-  const t1 = parseInt(m[1]), t2 = parseInt(m[2]);
-  if (isNaN(t1) || isNaN(t2) || t1 < 1 || t2 < 1) return null;
-  return { t1, t2 };
 }
 
 // ── helpers ──
