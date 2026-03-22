@@ -46,9 +46,10 @@ function normalizeUnits(t) {
 function updateAutoScoreDisplay() {
   const setScoreTxt = (t) => {
     const k = ScoreLogic.getUnitsMax(t), e = ScoreLogic.getExamMax(t);
-    if ($(`show_t${t}_keep`)) $(`show_t${t}_keep`).textContent = k;
-    if ($(`show_t${t}_exam`)) $(`show_t${t}_exam`).textContent = e;
-    if ($(`sum_t${t}_units`)) $(`sum_t${t}_units`).textContent = k;
+    if ($(`show_t${t}_keep`))  $(`show_t${t}_keep`).textContent  = k;
+    if ($(`show_t${t}_exam`))  $(`show_t${t}_exam`).textContent  = e;
+    if ($(`show_t${t}_total`)) $(`show_t${t}_total`).textContent = k + e;
+    if ($(`sum_t${t}_units`))  $(`sum_t${t}_units`).textContent  = k;
   };
   setScoreTxt(1); setScoreTxt(2);
 }
@@ -159,6 +160,29 @@ function renderSubList(t) {
     </div>`
   ).join('');
 
+  // ── ตัวชี้วัด ──
+  const allIndicators = [
+    ...($('ci_indicators_formative')?.value||'').split(/\r?\n/).map(s=>s.trim()).filter(Boolean).map(s=>({txt:s,type:'formative'})),
+    ...($('ci_indicators_summative')?.value||'').split(/\r?\n/).map(s=>s.trim()).filter(Boolean).map(s=>({txt:s,type:'summative'}))
+  ];
+  const selInds = Array.isArray(unit.indicators) ? unit.indicators : [];
+  const indicatorsHtml = allIndicators.length === 0
+    ? `<div style="color:#94a3b8;font-size:.78rem;padding:4px 0;">ยังไม่มีตัวชี้วัด — กรอกใน "คำอธิบาย/ตัวชี้วัด" ก่อน</div>`
+    : allIndicators.map((ind, k) => {
+        const checked = selInds.includes(ind.txt) ? 'checked' : '';
+        const badge = ind.type === 'formative'
+          ? `<span style="font-size:.68rem;background:#dbeafe;color:#1d4ed8;border-radius:4px;padding:1px 6px;">ระหว่างทาง</span>`
+          : `<span style="font-size:.68rem;background:#dcfce7;color:#15803d;border-radius:4px;padding:1px 6px;">ปลายทาง</span>`;
+        return `<label style="display:flex;align-items:flex-start;gap:7px;cursor:pointer;padding:4px 0;border-bottom:1px solid #f8fafc;font-size:.82rem;">
+          <input type="checkbox" ${checked} style="margin-top:2px;width:15px;height:15px;cursor:pointer;flex-shrink:0;"
+            onchange="App.units[${t}][${ui}].indicators=App.units[${t}][${ui}].indicators||[];
+              this.checked
+                ? (App.units[${t}][${ui}].indicators.includes('${ind.txt.replace(/'/g,"\\'")}') || App.units[${t}][${ui}].indicators.push('${ind.txt.replace(/'/g,"\\'")}'))
+                : (App.units[${t}][${ui}].indicators = App.units[${t}][${ui}].indicators.filter(x=>x!=='${ind.txt.replace(/'/g,"\\'")}'))">
+          <span>${ind.txt} ${badge}</span>
+        </label>`;
+      }).join('');
+
   wrap.innerHTML = `
     <div class="unit-tabs" style="margin-bottom:10px;">${tabsHtml}</div>
     <div class="sub-row p-3 border rounded bg-white" style="display:block;">
@@ -171,11 +195,25 @@ function renderSubList(t) {
           onchange="App.units[${t}][${ui}].max=Number(this.value)||0;updateAutoScoreDisplay();renderSubList(${t});">
         <button class="btn-rm" title="ลบหน่วยนี้" onclick="rmSub(${t},${ui})">✕ ลบหน่วย</button>
       </div>
+
+      <div style="font-weight:700;font-size:.82rem;color:#374151;margin-bottom:6px;">📋 งานย่อย</div>
       <div class="ms-2" style="display:flex;flex-direction:column;">
         ${itemsHtml}
         <button type="button" class="btn-add-sub mt-2" onclick="addSubItem(${t},${ui})">＋ เพิ่มงาน</button>
       </div>
       <div class="raw-preview mt-2">คะแนนดิบรวมของงาน: <strong>${ScoreLogic.getUnitRawMax(t,ui)}</strong> | คะแนนที่เก็บเข้าหน่วย: <strong class="res">${Number(unit.max)||0}</strong></div>
+
+      ${allIndicators.length > 0 ? `
+      <div style="margin-top:14px;border-top:2px dashed #e0e7ff;padding-top:12px;">
+        <div style="font-weight:700;font-size:.82rem;color:#4338ca;margin-bottom:8px;">
+          🎯 ตัวชี้วัดที่ใช้ในหน่วยนี้
+          <span style="font-weight:400;color:#94a3b8;font-size:.75rem;">(${selInds.length}/${allIndicators.length} ข้อ)</span>
+        </div>
+        <div style="max-height:220px;overflow-y:auto;padding-right:4px;">${indicatorsHtml}</div>
+      </div>` : `
+      <div style="margin-top:14px;border-top:2px dashed #e0e7ff;padding-top:10px;">
+        <div style="font-size:.78rem;color:#94a3b8;">🎯 ${indicatorsHtml}</div>
+      </div>`}
     </div>`;
 
   updateAutoScoreDisplay(); refreshCourseOverview();
