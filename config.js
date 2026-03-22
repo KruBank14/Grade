@@ -108,7 +108,8 @@ function api(action, data = {}) {
     'saveScout',
     'saveTeacherAssignments',
     'saveSchoolProfile',
-    'setupGradeYear'
+    'setupGradeYear',
+    'saveSubjectsTemplate'
   ]);
 
   // ===== POST JSON =====
