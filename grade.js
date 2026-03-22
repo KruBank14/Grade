@@ -3,18 +3,23 @@
 const ScoreLogic = {
   getTarget: () => (String(App.loadedClass||'').startsWith('ม.') ? 100 : 50),
   getUnitsMax:     t => (App.units[t]||[]).reduce((s,u) => s+(Number(u.max)||0), 0),
-  getExamUnitsMax: t => (App.examUnits?.[t]||[]).reduce((s,u) => s+(Number(u.max)||0), 0),
-  getExamMax:      t => {
+  // examUnit = { name, rawMax, scaledMax, indicators }
+  // rawMax   = คะแนนดิบของการสอบนั้น (เช่น สอบ 30 คะแนน)
+  // scaledMax = สัดส่วนที่นับเข้าเกรด (เช่น 10 คะแนน)
+  getExamMax: t => {
     const eu = App.examUnits?.[t];
-    if (eu && eu.length > 0) return eu.reduce((s,u) => s+(Number(u.max)||0), 0);
+    if (eu && eu.length > 0)
+      return eu.reduce((s,u) => s + (Number(u.scaledMax)||0), 0);
     return Math.max(0, ScoreLogic.getTarget() - ScoreLogic.getUnitsMax(t));
   },
-  calcExamFromSubs: (t, examSubVals) => {
-    // คำนวณคะแนนสอบรวมจาก sub items (scale ตาม max ของแต่ละรายการ)
+  // คำนวณคะแนนสอบรวม (หลัง scale) จากค่าดิบที่กรอก
+  calcExamScaled: (t, examRawVals) => {
     let total = 0;
     (App.examUnits?.[t]||[]).forEach((u, i) => {
-      const raw = Number(examSubVals[i]) || 0;
-      total += raw; // exam items ไม่ scale — กรอกตรงเลย
+      const raw     = Number(examRawVals[i]) || 0;
+      const rawMax  = Number(u.rawMax)    || 0;
+      const scaledMax = Number(u.scaledMax) || 0;
+      total += ScoreLogic.calcScaled(raw, rawMax, scaledMax);
     });
     return Math.round(total * 100) / 100;
   },
@@ -243,7 +248,8 @@ function toggleIgnoreR() { App.ignoreR = $('toggleR').checked; $$('#gtBody tr[da
 // ── จัดการรายการสอบ (examUnits) ──────────────────────
 function addExam(t) {
   if (!App.examUnits) App.examUnits = { 1: [], 2: [] };
-  App.examUnits[t].push({ name: `สอบครั้งที่ ${App.examUnits[t].length + 1}`, max: 50, indicators: [] });
+  const examMax = ScoreLogic.getExamMax(t); // สัดส่วนที่เหลือ
+  App.examUnits[t].push({ name: `สอบครั้งที่ ${App.examUnits[t].length + 1}`, rawMax: 100, scaledMax: examMax, indicators: [] });
   renderExamList(t);
   updateAutoScoreDisplay();
 }
@@ -289,21 +295,40 @@ function renderExamList(t) {
           </label>`;
         }).join('');
 
-    return `<div class="sub-row p-3 border rounded bg-white mb-2" style="display:block;">
+    const rawMax    = Number(exam.rawMax)    || Number(exam.max) || 0;
+    const scaledMax = Number(exam.scaledMax) || Number(exam.max) || 0;
+
+    return `<div class="sub-row p-3 border rounded bg-white mb-2" style="display:block;border-color:#bae6fd;">
       <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
-        <span style="font-weight:800;font-size:.85rem;color:#0369a1;">สอบครั้งที่ ${ei+1}</span>
+        <span style="font-weight:800;font-size:.85rem;color:#0369a1;">สอบ ${ei+1}.</span>
         <input class="sub-name" type="text" value="${exam.name||''}" placeholder="ชื่อการสอบ"
+          style="min-width:140px;"
           onchange="App.examUnits[${t}][${ei}].name=this.value">
-        <span class="sub-max-lbl">คะแนนเต็ม</span>
-        <input class="sub-max" type="number" min="1" value="${Number(exam.max)||0}"
-          onchange="App.examUnits[${t}][${ei}].max=Number(this.value)||0;updateAutoScoreDisplay();renderExamList(${t});">
-        <button class="btn-rm" onclick="rmExam(${t},${ei})">✕ ลบ</button>
+        <button class="btn-rm" onclick="rmExam(${t},${ei})">✕</button>
+      </div>
+      <div class="d-flex align-items-center gap-3 flex-wrap mb-1"
+           style="background:#f0f9ff;border-radius:8px;padding:8px 12px;">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span style="font-size:.78rem;color:#0369a1;font-weight:700;">คะแนนดิบ (สอบจริง)</span>
+          <input class="sub-max" type="number" min="1" value="${rawMax}"
+            style="width:72px;"
+            onchange="App.examUnits[${t}][${ei}].rawMax=Number(this.value)||0;renderExamList(${t});">
+        </div>
+        <span style="color:#94a3b8;">→ scale →</span>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span style="font-size:.78rem;color:#6d28d9;font-weight:700;">นับเข้าเกรด</span>
+          <input class="sub-max" type="number" min="1" value="${scaledMax}"
+            style="width:72px;"
+            onchange="App.examUnits[${t}][${ei}].scaledMax=Number(this.value)||0;updateAutoScoreDisplay();renderExamList(${t});">
+        </div>
+        <span style="font-size:.76rem;color:#64748b;background:#e0f2fe;padding:3px 8px;border-radius:6px;">
+          กรอกดิบ ${rawMax} → ได้ ${scaledMax} คะแนน
+        </span>
       </div>
       ${allIndicators.length > 0 ? `
       <div style="margin-top:8px;border-top:1px dashed #bae6fd;padding-top:8px;">
         <div style="font-weight:700;font-size:.78rem;color:#0369a1;margin-bottom:6px;">
-          🎯 ตัวชี้วัดที่ใช้ในการสอบนี้
-          <span style="font-weight:400;color:#94a3b8;">(${selInds.length}/${allIndicators.length})</span>
+          🎯 ตัวชี้วัด <span style="font-weight:400;color:#94a3b8;">(${selInds.length}/${allIndicators.length})</span>
         </div>
         <div style="max-height:180px;overflow-y:auto;">${indHtml}</div>
       </div>` : ''}
@@ -499,9 +524,11 @@ function buildHead() {
       const examItems = App.examUnits?.[t] || [];
       if (examItems.length > 0) {
         r1 += `<th colspan="${examItems.length}" class="th-t${t}s sc${t}">📝 รายการสอบ เทอม ${t}</th>`;
-        examItems.forEach(eu => r2 += `<th class="th-t${t}raw sc${t}">${eu.name}<br><small>(${Number(eu.max)||0})</small></th>`);
+        examItems.forEach(eu =>
+          r2 += `<th class="th-t${t}raw sc${t}">${eu.name}<br><small>ดิบ(${Number(eu.rawMax)||0}) → ${Number(eu.scaledMax)||0}คะ</small></th>`
+        );
       } else {
-        r1 += `<th rowspan="3" class="th-t${t}e" style="width:120px;">รายการสอบ<br><small style="color:#94a3b8;">ยังไม่มี</small></th>`;
+        r1 += `<th rowspan="3" class="th-t${t}e" style="width:140px;color:#94a3b8;">ยังไม่มีรายการสอบ</th>`;
       }
       r1 += `<th rowspan="3" class="th-t${t}sc" style="width:100px;">เก็บรวม<br><small>(${ScoreLogic.getUnitsMax(t)})</small></th>
               <th rowspan="3" class="th-t${t}e" style="width:88px;">สอบรวม<br><small>(${ScoreLogic.getExamMax(t)})</small></th>
@@ -675,13 +702,13 @@ function calcExamSub(el, t) {
   updateScoreInputState(el);
   const tr = el.closest('tr');
   handleAutoTab(el, tr, mx);
-  // คำนวณ exam รวมจาก sub items ทั้งหมด
-  const examSubVals = [...tr.querySelectorAll(`.exam-sub${t}`)].map(i => Number(i.value)||0);
-  const examTotal = examSubVals.reduce((s,v) => s+v, 0);
-  // แสดงใน .t${t}sc (exam span) ถ้ามี
+  // คำนวณ exam รวมหลัง scale
+  const examRawVals = [...tr.querySelectorAll(`.exam-sub${t}`)].map(i => Number(i.value)||0);
+  const examScaled  = ScoreLogic.calcExamScaled(t, examRawVals);
+  // อัปเดต span แสดงผล (ถ้ามี)
   const examSpan = tr.querySelector(`.t${t}e-total`);
-  if (examSpan) examSpan.textContent = examTotal || '-';
-  recalcTotsFromExamSub(tr, t, examTotal);
+  if (examSpan) examSpan.textContent = examScaled || '-';
+  recalcTotsFromExamSub(tr, t, examScaled);
   refreshAllScoreInputStates(tr);
 }
 
@@ -841,11 +868,11 @@ async function saveGrades() {
     const acc     = ScoreLogic.calcKeepFromFlat(t, subVals);
     const examEl  = tr.querySelector(`input[data-term="${t}"][data-type="exam"]`);
 
-    // exam sub items (ถ้ามี)
+    // exam sub items (ถ้ามี) — scale แล้วส่ง
     const examSubInputs = [...tr.querySelectorAll(`.exam-sub${t}`)];
     const examSubVals   = examSubInputs.map(i => i.value);
     const examVal = examSubInputs.length > 0
-      ? String(examSubVals.reduce((s,v) => s+(Number(v)||0), 0))
+      ? String(ScoreLogic.calcExamScaled(t, examSubVals.map(v => Number(v)||0)))
       : (examEl ? examEl.value : '');
 
     // ใช้ snapshot สำหรับเทอมอื่น
