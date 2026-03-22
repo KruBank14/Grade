@@ -108,38 +108,77 @@ function refreshCourseOverview() {
   put('ov_unit_count', String((App.units?.[1]?.length || 0) + (App.units?.[2]?.length || 0)));
 }
 
-function addSub(t) { App.units[t].push({ name: `หน่วยที่ ${App.units[t].length + 1}`, max: 10, items: [{ name: "งาน 1", max: 10 }] }); refreshCourseOverview(); renderSubList(t); }
-function rmSub(t, ui) { if (confirm(`ลบ "${App.units[t][ui].name}" ?`)) { App.units[t].splice(ui, 1); refreshCourseOverview(); renderSubList(t); } }
+function addSub(t) {
+  App.units[t].push({ name: `หน่วยที่ ${App.units[t].length + 1}`, max: 10, items: [{ name: 'งาน 1', max: 10 }] });
+  if (!App.activeSubUnit) App.activeSubUnit = {};
+  App.activeSubUnit[t] = App.units[t].length - 1; // switch ไปหน่วยใหม่
+  refreshCourseOverview(); renderSubList(t);
+}
+function rmSub(t, ui) {
+  if (!confirm(`ลบ "${App.units[t][ui].name}" ?`)) return;
+  App.units[t].splice(ui, 1);
+  if (!App.activeSubUnit) App.activeSubUnit = {};
+  App.activeSubUnit[t] = Math.max(0, (App.activeSubUnit[t]||0) - (ui <= (App.activeSubUnit[t]||0) ? 1 : 0));
+  refreshCourseOverview(); renderSubList(t);
+}
 function addSubItem(t, ui) { App.units[t][ui].items.push({ name: `งาน ${App.units[t][ui].items.length + 1}`, max: 10 }); refreshCourseOverview(); renderSubList(t); }
 function rmSubItem(t, ui, ii) { if (confirm('ลบงานนี้?')) { App.units[t][ui].items.splice(ii, 1); refreshCourseOverview(); renderSubList(t); } }
 
 function renderSubList(t) {
   const wrap = $(`subList_${t}`); if (!wrap) return;
-  if (!App.units[t].length) { wrap.innerHTML = `<div class="text-muted text-center py-3 border rounded">ยังไม่มีหน่วยการเรียนรู้</div>`; updateAutoScoreDisplay(); refreshCourseOverview(); return; }
-  
-  wrap.innerHTML = App.units[t].map((unit, ui) => {
-    return `<div class="sub-row mb-2 p-3 border rounded bg-white" style="display:block;">
-      <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
-        <span class="sub-n">${ui + 1}.</span>
-        <input class="sub-name" type="text" value="${unit.name || ''}" placeholder="ชื่อหน่วย" onchange="App.units[${t}][${ui}].name=this.value">
-        <span class="sub-max-lbl">คะแนนเต็ม</span>
-        <input class="sub-max" type="number" min="1" value="${Number(unit.max)||0}" onchange="App.units[${t}][${ui}].max=Number(this.value)||0;updateAutoScoreDisplay();renderSubList(${t});">
-        <button class="btn-rm" onclick="rmSub(${t},${ui})">✕</button>
+  const units = App.units[t] || [];
+
+  if (!units.length) {
+    wrap.innerHTML = `<div class="text-muted text-center py-4 border rounded" style="color:#94a3b8;">ยังไม่มีหน่วยการเรียนรู้</div>`;
+    updateAutoScoreDisplay(); refreshCourseOverview(); return;
+  }
+
+  // activeSubUnit[t] = index หน่วยที่กำลังแสดง (default 0)
+  if (!App.activeSubUnit) App.activeSubUnit = {};
+  if (App.activeSubUnit[t] === undefined || App.activeSubUnit[t] >= units.length)
+    App.activeSubUnit[t] = 0;
+  const ui = App.activeSubUnit[t];
+  const unit = units[ui];
+
+  // ── Tab bar ──
+  const tabsHtml = units.map((u, i) =>
+    `<button class="utab ${i===ui?'on':''}" onclick="App.activeSubUnit[${t}]=${i};renderSubList(${t})">
+      ${u.name||`หน่วย ${i+1}`}
+    </button>`
+  ).join('');
+
+  // ── Content: แก้ชื่อ/คะแนนเต็มหน่วย + รายการงาน ──
+  const itemsHtml = (unit.items||[]).map((item, ii) =>
+    `<div class="d-flex align-items-center gap-2 flex-wrap" style="padding:8px 0;border-bottom:1px solid #f1f5f9;">
+      <input class="sub-name" type="text" value="${item.name||''}" placeholder="ชื่องาน"
+        onchange="App.units[${t}][${ui}].items[${ii}].name=this.value">
+      <span class="sub-max-lbl">เต็ม</span>
+      <input class="sub-max" type="number" min="1" value="${Number(item.max)||0}"
+        onchange="App.units[${t}][${ui}].items[${ii}].max=Number(this.value)||0;renderSubList(${t});">
+      <button class="btn-rm" onclick="rmSubItem(${t},${ui},${ii})">✕</button>
+    </div>`
+  ).join('');
+
+  wrap.innerHTML = `
+    <div class="unit-tabs" style="margin-bottom:10px;">${tabsHtml}</div>
+    <div class="sub-row p-3 border rounded bg-white" style="display:block;">
+      <div class="d-flex align-items-center gap-2 flex-wrap mb-3">
+        <span style="font-weight:800;font-size:.88rem;color:#6d28d9;">หน่วยที่ ${ui+1}</span>
+        <input class="sub-name" type="text" value="${unit.name||''}" placeholder="ชื่อหน่วย"
+          onchange="App.units[${t}][${ui}].name=this.value;renderSubList(${t})">
+        <span class="sub-max-lbl">คะแนนเต็มหน่วย</span>
+        <input class="sub-max" type="number" min="1" value="${Number(unit.max)||0}"
+          onchange="App.units[${t}][${ui}].max=Number(this.value)||0;updateAutoScoreDisplay();renderSubList(${t});">
+        <button class="btn-rm" title="ลบหน่วยนี้" onclick="rmSub(${t},${ui})">✕ ลบหน่วย</button>
       </div>
-      <div class="ms-4 d-flex flex-column gap-2">
-        ${(unit.items ||[]).map((item, ii) => `<div class="d-flex align-items-center gap-2 flex-wrap">
-          <input class="sub-name" type="text" value="${item.name || ''}" placeholder="ชื่องาน" onchange="App.units[${t}][${ui}].items[${ii}].name=this.value">
-          <span class="sub-max-lbl">เต็ม</span>
-          <input class="sub-max" type="number" min="1" value="${Number(item.max)||0}" onchange="App.units[${t}][${ui}].items[${ii}].max=Number(this.value)||0;renderSubList(${t});">
-          <button class="btn-rm" onclick="rmSubItem(${t},${ui},${ii})">✕</button>
-        </div>`).join('')}
-        <button type="button" class="btn-add-sub" onclick="addSubItem(${t},${ui})">＋ เพิ่มงาน</button>
+      <div class="ms-2" style="display:flex;flex-direction:column;">
+        ${itemsHtml}
+        <button type="button" class="btn-add-sub mt-2" onclick="addSubItem(${t},${ui})">＋ เพิ่มงาน</button>
       </div>
-      <div class="raw-preview mt-2">คะแนนดิบรวมของงาน: <strong>${ScoreLogic.getUnitRawMax(t, ui)}</strong> | คะแนนที่เก็บเข้าหน่วย: <strong class="res">${Number(unit.max)||0}</strong></div>
+      <div class="raw-preview mt-2">คะแนนดิบรวมของงาน: <strong>${ScoreLogic.getUnitRawMax(t,ui)}</strong> | คะแนนที่เก็บเข้าหน่วย: <strong class="res">${Number(unit.max)||0}</strong></div>
     </div>`;
-  }).join('');
-  updateAutoScoreDisplay();
-  refreshCourseOverview();
+
+  updateAutoScoreDisplay(); refreshCourseOverview();
 }
 
 function toggleCols(t) { App.expanded[t] = !App.expanded[t]; $('gtbl').classList.toggle(`t${t}-collapsed`, !App.expanded[t]); if ($(`tbtn${t}`)) $(`tbtn${t}`).innerHTML = `<span class="arr">${App.expanded[t] ? '▼' : '▶'}</span> ${App.expanded[t] ? 'ยุบ' : 'ขยาย'}`; }
