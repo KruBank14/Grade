@@ -1067,12 +1067,16 @@ async function saveGrades() {
       config: buildConfigPayload(),
       gradeRecords: records
     });
-    // อัปเดต snapshot
+    // อัปเดต snapshot ใน App.students ให้ตรงกับที่เพิ่งบันทึก
     records.forEach(rec => {
       if (stuMap[rec.studentId]) Object.assign(stuMap[rec.studentId], {
-        t1_sub: rec.t1_sub, t1_acc: rec.t1_acc, t1_exam: rec.t1_exam,
-        t2_sub: rec.t2_sub, t2_acc: rec.t2_acc, t2_exam: rec.t2_exam
+        t1_sub: rec.t1_sub, t1_acc: rec.t1_acc, t1_exam: rec.t1_exam, t1_exam_sub: rec.t1_exam_sub,
+        t2_sub: rec.t2_sub, t2_acc: rec.t2_acc, t2_exam: rec.t2_exam, t2_exam_sub: rec.t2_exam_sub
       });
+    });
+    // sync กลับ App.students ด้วย (ใช้เป็น source ครั้งต่อไป)
+    (App.students || []).forEach(s => {
+      if (stuMap[s.studentId]) s.grades = stuMap[s.studentId];
     });
     Utils.toast(`✅ บันทึกเทอม ${t} — ` + res);
   } catch (e) {
