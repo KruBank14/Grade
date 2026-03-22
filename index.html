@@ -1478,9 +1478,19 @@ body{
       <div class="card" style="padding:15px 20px;">
         <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
           <div style="font-weight:800;font-size:.97rem;display:flex;align-items:center;gap:15px;flex-wrap:wrap;">
-            <div>
-              📋 <span id="lblSubj"></span>
-              <span style="font-weight:400;color:var(--muted);font-size:.85rem;"> — ชั้น <span id="lblClass"></span></span>
+            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+              <div>
+                📋 <span id="lblSubj"></span>
+                <span style="font-weight:400;color:var(--muted);font-size:.85rem;"> — ชั้น <span id="lblClass"></span></span>
+              </div>
+              <div style="display:flex;gap:0;border:1.5px solid #6d28d9;border-radius:8px;overflow:hidden;">
+                <button id="termTab1" onclick="switchGradeTerm(1)"
+                  style="padding:4px 14px;font-size:.82rem;font-weight:700;border:none;cursor:pointer;
+                         background:#6d28d9;color:#fff;">ภาคเรียนที่ 1</button>
+                <button id="termTab2" onclick="switchGradeTerm(2)"
+                  style="padding:4px 14px;font-size:.82rem;font-weight:700;border:none;cursor:pointer;
+                         background:#fff;color:#6d28d9;">ภาคเรียนที่ 2</button>
+              </div>
             </div>
             <label
               id="toggleRWrapper"
