@@ -82,7 +82,10 @@ async function doLogin() {
         }
       }
 
-      if (typeof updateSubjDrop === "function") {
+      App.gradeTerm = 1; // default เทอม 1
+      if (typeof switchGradeTerm === "function") {
+        switchGradeTerm(1);
+      } else if (typeof updateSubjDrop === "function") {
         updateSubjDrop();
       }
 
