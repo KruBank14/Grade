@@ -1,7 +1,7 @@
 // 6. SCORE MATH & LOGIC
 // =====================================================
 const ScoreLogic = {
-  getTarget: t => App.isSemMode ? 100 : 50,
+  getTarget: t => 50,
   getUnitsMax: t => (App.units[t] ||[]).reduce((s, u) => s + (Number(u.max) || 0), 0),
   getExamMax: t => Math.max(0, ScoreLogic.getTarget(t) - ScoreLogic.getUnitsMax(t)),
   getUnitRawMax: (t, uIdx) => ((App.units[t][uIdx] || {}).items ||[]).reduce((s, i) => s + (Number(i.max) || 0), 0),
@@ -31,7 +31,7 @@ const ScoreLogic = {
   },
   syncHiddenInputs: () => {['c_t1a','c_t1e','c_t2a','c_t2e'].forEach(id => { if (!$(id)) { const i = document.createElement('input'); i.type = 'hidden'; i.id = id; document.body.appendChild(i); } });
     $('c_t1a').value = ScoreLogic.getUnitsMax(1); $('c_t1e').value = ScoreLogic.getExamMax(1);
-    $('c_t2a').value = App.isSemMode ? 0 : ScoreLogic.getUnitsMax(2); $('c_t2e').value = App.isSemMode ? 0 : ScoreLogic.getExamMax(2);
+    $('c_t2a').value = ScoreLogic.getUnitsMax(2); $('c_t2e').value = ScoreLogic.getExamMax(2);
   }
 };
 
@@ -50,14 +50,14 @@ function updateAutoScoreDisplay() {
     if ($(`show_t${t}_exam`)) $(`show_t${t}_exam`).textContent = e;
     if ($(`sum_t${t}_units`)) $(`sum_t${t}_units`).textContent = k;
   };
-  setScoreTxt(1); if (!App.isSemMode) setScoreTxt(2);
+  setScoreTxt(1); setScoreTxt(2);
 }
 
 function refreshUnitPanelLabels() {
-  if ($('sum_t1_units')?.parentElement) $('sum_t1_units').parentElement.innerHTML = `<span>คะแนนรวมทุกหน่วย เทอม 1:</span><strong id="sum_t1_units">${ScoreLogic.getUnitsMax(1)}</strong><span>/</span><span class="res">${App.isSemMode ? '100' : '50'}</span>`;
+  if ($('sum_t1_units')?.parentElement) $('sum_t1_units').parentElement.innerHTML = `<span>คะแนนรวมทุกหน่วย เทอม 1:</span><strong id="sum_t1_units">${ScoreLogic.getUnitsMax(1)}</strong><span>/</span><span class="res">${'50'}</span>`;
   if ($('sum_t2_units')?.parentElement) $('sum_t2_units').parentElement.innerHTML = `<span>คะแนนรวมทุกหน่วย เทอม 2:</span><strong id="sum_t2_units">${ScoreLogic.getUnitsMax(2)}</strong><span>/</span><span class="res">50</span>`;
-  if ($('t2AutoBlock')) $('t2AutoBlock').style.display = App.isSemMode ? 'none' : 'flex';
-  if ($('tabTerm2Btn')) $('tabTerm2Btn').style.display = App.isSemMode ? 'none' : 'block';
+  if ($('t2AutoBlock')) $('t2AutoBlock').style.display = 'flex';
+  if ($('tabTerm2Btn')) $('tabTerm2Btn').style.display = 'block';
   updateAutoScoreDisplay();
   refreshCourseOverview();
 }
@@ -149,10 +149,10 @@ async function loadGrades() {
   const year = $('gYear').value, cls = $('gClass').value, subj = $('gSubj').value;
   if (!subj || subj === "-- ไม่พบวิชา --") return Utils.toast('กรุณาเลือกวิชาที่ถูกต้อง', 'error');
 
-  App.isSemMode = cls.includes("เทอม");
+  App.isSemMode = false; // ทุกชั้นใช้โหมดรายปี (2 เทอมในไฟล์เดียว)
   $('lblClass').textContent = cls; $('lblSubj').textContent = subj;
   Utils.showLoading('กำลังโหลดข้อมูล...');
-  $('toggleRWrapper').style.display = App.isSemMode ? 'flex' : 'none'; $('toggleR').checked = false; App.ignoreR = false;
+  $('toggleRWrapper').style.display = 'none'; $('toggleR').checked = false; App.ignoreR = false;
 
   try {
     const res = await api('getGrades', { year, classroom: cls, subject: subj });
@@ -171,18 +171,10 @@ App.courseInfo = res.config?.courseInfo || {};
     setCourseInfoForm(res.config?.courseInfo || {}, subj);
     try { setSchoolProfileForm(await api('getSchoolProfile', {}) || {}); } catch(e) { setSchoolProfileForm({}); }
 
-    if (App.isSemMode) {
-      if ($('tabTerm2Btn')) $('tabTerm2Btn').style.display = 'none';
-      const btnAddT1 = document.querySelector('.btn-add-sub[onclick="addSub(1)"]');
-      if (btnAddT1) btnAddT1.textContent = "＋ เพิ่มหัวข้อคะแนนย่อย";
-      const t1TabBtn = document.querySelector('.ttab[onclick*="switchTerm(1"]');
-      if (t1TabBtn) switchTerm(1, t1TabBtn);
-      App.units[2] =[];
-    }
     App.units[1] = res.config?.units?.t1 || res.config?.subItems?.t1 || [];
-    if (!App.isSemMode) App.units[2] = res.config?.units?.t2 || res.config?.subItems?.t2 ||[];
+    App.units[2] = res.config?.units?.t2 || res.config?.subItems?.t2 || [];
 
-    normalizeUnits(1); normalizeUnits(2); renderSubList(1); if (!App.isSemMode) renderSubList(2);
+    normalizeUnits(1); normalizeUnits(2); renderSubList(1); renderSubList(2);
     refreshUnitPanelLabels(); updateAutoScoreDisplay(); refreshCourseOverview();
     switchCourseSubTab('basic', $('courseTabBasicBtn'));
 
@@ -233,10 +225,9 @@ App.courseInfo = res.config?.courseInfo || {};
     buildTable();
 
     // ── toggle ปุ่ม ปพ.6 ตาม mode ──
-    const isSem = App.isSemMode;
-    if ($('btnPp6T1'))   $('btnPp6T1').style.display   = isSem ? 'none' : '';
-    if ($('btnPp6Year')) $('btnPp6Year').style.display  = isSem ? 'none' : '';
-    if ($('btnPp6Sem'))  $('btnPp6Sem').style.display   = isSem ? ''     : 'none';
+    if ($('btnPp6T1'))   $('btnPp6T1').style.display   = '';
+    if ($('btnPp6Year')) $('btnPp6Year').style.display  = '';
+    if ($('btnPp6Sem'))  $('btnPp6Sem').style.display   = 'none';
     renderHolisticTable(App.students, 'assContainer', 'assBody', 'subject');
     renderHolisticTable(App.students, 'hrAssContainer', 'hrAssBody', 'homeroom');
     renderRTWTable();
@@ -245,7 +236,7 @@ App.courseInfo = res.config?.courseInfo || {};
     if (typeof renderClubPanel === 'function') renderClubPanel();
 
     showScoreMain($('tabScoreMain'));
-    Utils.toast(`โหลดข้อมูลสำเร็จ: โหมด${App.isSemMode ? 'มัธยม (รายภาคเรียน)' : 'ประถม (รายปี)'}`);
+    Utils.toast('โหลดข้อมูลสำเร็จ');
   } catch (e) { Utils.toast('เกิดข้อผิดพลาด: ' + e.message, 'error'); $('gradePanel').style.display = 'none'; }
   Utils.hideLoading();
 }
@@ -262,10 +253,10 @@ function buildHead() {
 
   const addTermHeaders = (t) => {
     const flat = ScoreLogic.getFlatItems(t), units = App.units[t] ||[], target = ScoreLogic.getTarget(t);
-    const lblT = App.isSemMode ? '' : ` ท.${t}`;
+    const lblT = ` ท.${t}`;
     if (flat.length > 0) r1 += `<th colspan="${flat.length + units.length}" class="th-t${t}s sc${t}">📝 หน่วย / งาน เทอม ${t}</th>`;
-    r1 += `<th rowspan="3" class="th-t${t}sc" style="width:88px;"><div style="margin-bottom:3px;">${App.isSemMode ? 'คะแนนเก็บ' : 'เก็บ'+lblT}<br><small>(${ScoreLogic.getUnitsMax(t)})</small></div>${flat.length > 0 ? `<button class="tbtn" id="tbtn${t}" onclick="toggleCols(${t})"><span class="arr">▼</span> ยุบ</button>` : ''}</th>
-           <th rowspan="3" class="th-t${t}e" style="width:72px;">${App.isSemMode ? 'สอบ' : 'สอบ'+lblT}<br><small>(${ScoreLogic.getExamMax(t)})</small></th>
+    r1 += `<th rowspan="3" class="th-t${t}sc" style="width:88px;"><div style="margin-bottom:3px;">${'เก็บ'+lblT}<br><small>(${ScoreLogic.getUnitsMax(t)})</small></div>${flat.length > 0 ? `<button class="tbtn" id="tbtn${t}" onclick="toggleCols(${t})"><span class="arr">▼</span> ยุบ</button>` : ''}</th>
+           <th rowspan="3" class="th-t${t}e" style="width:72px;">${'สอบ'+lblT}<br><small>(${ScoreLogic.getExamMax(t)})</small></th>
            <th rowspan="3" class="th-t${t}t" style="width:72px;">รวม${lblT}<br><small>(${target})</small></th>`;
     
     units.forEach(u => {
@@ -279,13 +270,10 @@ function buildHead() {
   };
 
   addTermHeaders(1);
-  if (App.isSemMode) r1 += `<th rowspan="3" class="th-base" style="width:65px;background:#475569;color:#fff;">สถานะ</th>`;
-  else {
-    addTermHeaders(2);
-    r1 += `<th rowspan="3" class="th-sum-keep" style="width:80px;">รวมเก็บ<br><small>(ท.1+ท.2)</small><br><small style="opacity:.8;">(${ScoreLogic.getUnitsMax(1)+ScoreLogic.getUnitsMax(2)})</small></th>
-           <th rowspan="3" class="th-sum-exam" style="width:80px;">รวมสอบ<br><small>(ท.1+ท.2)</small><br><small style="opacity:.8;">(${ScoreLogic.getExamMax(1)+ScoreLogic.getExamMax(2)})</small></th>
-           <th rowspan="3" class="th-grand" style="width:74px;">รวม<br>ทั้งปี</th>`;
-  }
+  addTermHeaders(2);
+  r1 += `<th rowspan="3" class="th-sum-keep" style="width:80px;">รวมเก็บ<br><small>(ท.1+ท.2)</small><br><small style="opacity:.8;">(${ScoreLogic.getUnitsMax(1)+ScoreLogic.getUnitsMax(2)})</small></th>
+         <th rowspan="3" class="th-sum-exam" style="width:80px;">รวมสอบ<br><small>(ท.1+ท.2)</small><br><small style="opacity:.8;">(${ScoreLogic.getExamMax(1)+ScoreLogic.getExamMax(2)})</small></th>
+         <th rowspan="3" class="th-grand" style="width:74px;">รวม<br>ทั้งปี</th>`;
   r1 += `<th rowspan="3" style="width:65px;background:#4f46e5;color:#fff;font-size:15px;border-right:1px solid rgba(255,255,255,.12);vertical-align:middle;">เกรด</th>`;
   $('gtHead').innerHTML = `<tr>${r1}</tr><tr>${r2}</tr><tr>${r3}</tr>`;
 }
@@ -310,7 +298,7 @@ function buildBody() {
     const keep = ScoreLogic.calcKeepFromFlat(t, flatVals), exam = Number(s.grades?.[`t${t}_exam`]) || 0, total = keep + exam;
     cells += `<td class="td-sc${t}"><span class="t${t}sc">${keep || '-'}</span></td>
               <td><input type="number" class="sinput ${t===2?'t2':''} s-t${t}e" min="0" max="${ScoreLogic.getExamMax(t)}" value="${s.grades?.[`t${t}_exam`] ?? ''}" oninput="calcExam(this)"></td>
-              <td><span class="tbadge ${total === 0 && !App.isSemMode ? 'nil' : (total >= (App.isSemMode?50:25) ? 'ok' : 'fail')} t${t}tot">${total || '-'}</span></td>`;
+              <td><span class="tbadge ${total === 0 ? 'nil' : (total >= 25 ? 'ok' : 'fail')} t${t}tot">${total || '-'}</span></td>`;
     return { cells, keep, exam, total };
   };
 
@@ -323,12 +311,7 @@ function buildBody() {
 
     let finalScore = t1.total, isR = false;
 
-    if (App.isSemMode) {
-      let rStat = String(s.grades?.t2_acc || 'ปกติ').trim();
-      if (rStat !== 'ติด ร' && rStat !== 'แก้ ร') rStat = 'ปกติ';
-      if (!App.ignoreR && rStat === 'ติด ร') isR = true;
-      html += `<td style="background:#f8fafc;"><select class="sinput r-status" style="width:55px;font-size:0.75rem;padding:2px;text-align:center;cursor:pointer;" onchange="recalcTots(this.closest('tr'))"><option value="ปกติ" ${rStat === 'ปกติ' ? 'selected' : ''}>-</option><option value="ติด ร" ${rStat === 'ติด ร' ? 'selected' : ''}>ติด ร</option><option value="แก้ ร" ${rStat === 'แก้ ร' ? 'selected' : ''}>แก้ ร</option></select></td>`;
-    } else {
+    {
       const t2 = buildTermCells(2, s);
       finalScore = t1.total + t2.total;
       html += `${t2.cells}
@@ -398,15 +381,15 @@ function recalcTots(tr) {
   updateUI('.sum-keep', Math.round((t1s + t2s) * 100) / 100, `sbadge-keep sum-keep`);
   updateUI('.sum-exam', t1e + t2e, `sbadge-exam sum-exam`);
 
-  const finalScore = App.isSemMode ? t1t : grand;
-  const isR = App.isSemMode && !App.ignoreR && (tr.querySelector('.r-status')?.value === 'ติด ร');
+  const finalScore = grand;
+  const isR = false;
   updateUI('.final-grade', isR ? 'ร' : (finalScore === 0 ? '-' : Utils.calcGradeFrontend(finalScore)), `gbadge ${isR ? 'fail' : (finalScore === 0 ? 'nil' : (finalScore < 50 ? 'fail' : 'ok'))} final-grade`);
 }
 
 function applySubConfig() {
   if (!App.students.length) return Utils.toast('โหลดรายชื่อก่อน', 'error');
-  if (ScoreLogic.getUnitsMax(1) > (App.isSemMode ? 100 : 50)) return Utils.toast(`เทอม 1: คะแนนรวมเกิน ${App.isSemMode ? 100 : 50}`, 'error');
-  if (!App.isSemMode && ScoreLogic.getUnitsMax(2) > 50) return Utils.toast('เทอม 2: คะแนนรวมเกิน 50', 'error');
+  if (ScoreLogic.getUnitsMax(1) > (50)) return Utils.toast(`เทอม 1: คะแนนรวมเกิน ${50}`, 'error');
+  if (ScoreLogic.getUnitsMax(2) > 50) return Utils.toast('เทอม 2: คะแนนรวมเกิน 50', 'error');
   ScoreLogic.syncHiddenInputs(); refreshUnitPanelLabels();
   
   const snap = {};
@@ -494,16 +477,16 @@ function setSchoolProfileForm(p = {}) {
 }
 
 function buildConfigPayload() {
-  return { t1_acc: ScoreLogic.getUnitsMax(1), t1_exam: ScoreLogic.getExamMax(1), t2_acc: App.isSemMode ? 0 : ScoreLogic.getUnitsMax(2), t2_exam: App.isSemMode ? 0 : ScoreLogic.getExamMax(2), units: { t1: App.units[1], t2: App.units[2] }, subItems: { t1: [], t2:[] }, rawMax: { t1: 0, t2: 0 }, courseInfo: getCourseInfoForm() };
+  return { t1_acc: ScoreLogic.getUnitsMax(1), t1_exam: ScoreLogic.getExamMax(1), t2_acc: ScoreLogic.getUnitsMax(2), t2_exam: ScoreLogic.getExamMax(2), units: { t1: App.units[1], t2: App.units[2] }, subItems: { t1: [], t2:[] }, rawMax: { t1: 0, t2: 0 }, courseInfo: getCourseInfoForm() };
 }
 
 async function saveGrades() {
   ScoreLogic.syncHiddenInputs();
 
-  if (ScoreLogic.getUnitsMax(1) > (App.isSemMode ? 100 : 50)) {
-    return Utils.toast(`เทอม 1: คะแนนรวมหน่วยเกิน ${App.isSemMode ? 100 : 50}`, 'error');
+  if (ScoreLogic.getUnitsMax(1) > (50)) {
+    return Utils.toast(`เทอม 1: คะแนนรวมหน่วยเกิน ${50}`, 'error');
   }
-  if (!App.isSemMode && ScoreLogic.getUnitsMax(2) > 50) {
+  if (ScoreLogic.getUnitsMax(2) > 50) {
     return Utils.toast('เทอม 2: คะแนนรวมหน่วยเกิน 50', 'error');
   }
 
@@ -518,9 +501,7 @@ async function saveGrades() {
       t1_acc: ScoreLogic.calcKeepFromFlat(1, t1sv),
       t1_exam: tr.querySelector('.s-t1e')?.value || '',
       t2_sub: t2sv,
-      t2_acc: App.isSemMode
-        ? (tr.querySelector('.r-status')?.value || 'ปกติ')
-        : ScoreLogic.calcKeepFromFlat(2, t2sv),
+      t2_acc: ScoreLogic.calcKeepFromFlat(2, t2sv),
       t2_exam: tr.querySelector('.s-t2e')?.value || ''
     });
   });
@@ -558,7 +539,7 @@ async function saveGrades() {
 
 async function saveConfigOnly() {
   const subj = $('gSubj').value; if (!subj || subj === "-- ไม่พบวิชา --") return false;
-  if (ScoreLogic.getUnitsMax(1) > (App.isSemMode ? 100 : 50) || (!App.isSemMode && ScoreLogic.getUnitsMax(2) > 50)) { Utils.toast('คะแนนรวมเกินเป้าหมาย', 'warning'); return false; }
+  if (ScoreLogic.getUnitsMax(1) > 50 || ScoreLogic.getUnitsMax(2) > 50) { Utils.toast('คะแนนรวมเกินเป้าหมาย', 'warning'); return false; }
   Utils.showLoading('กำลังบันทึกการตั้งค่า...');
   try { await api('saveGrades', { year: $('gYear').value, classroom: $('gClass').value, subject: subj, config: buildConfigPayload(), gradeRecords:[] }); return true; } catch (e) { Utils.toast(e.message, 'error'); return false; } finally { Utils.hideLoading(); }
 }
