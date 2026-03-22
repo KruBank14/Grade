@@ -539,21 +539,18 @@ function buildConfigPayload() {
   return { t1_acc: ScoreLogic.getUnitsMax(1), t1_exam: ScoreLogic.getExamMax(1), t2_acc: ScoreLogic.getUnitsMax(2), t2_exam: ScoreLogic.getExamMax(2), units: { t1: App.units[1], t2: App.units[2] }, subItems: { t1: [], t2:[] }, rawMax: { t1: 0, t2: 0 }, courseInfo: getCourseInfoForm() };
 }
 
-// term = 1 หรือ 2 (บันทึกเฉพาะเทอมนั้น ไม่เขียนทับอีกเทอม)
-async function saveGrades(term) {
+async function saveGrades() {
   ScoreLogic.syncHiddenInputs();
 
   const subj = App.loadedSubject;
   const cls  = App.loadedClass  || $('gClass').value;
   const year = App.loadedYear   || $('gYear').value;
 
-  if (!subj) return Utils.toast('กรุณากดโหลดรายชื่อก่อนบันทึก', 'error');
+  if (!subj) return Utils.toast('กรุณาเลือกวิชาก่อนบันทึก', 'error');
 
-  const saveTerm = term || App.gradeTerm || 1;
-
-  if (saveTerm === 1 && ScoreLogic.getUnitsMax(1) > 50)
+  if (ScoreLogic.getUnitsMax(1) > 50)
     return Utils.toast('เทอม 1: คะแนนรวมหน่วยเกิน 50', 'error');
-  if (saveTerm === 2 && ScoreLogic.getUnitsMax(2) > 50)
+  if (ScoreLogic.getUnitsMax(2) > 50)
     return Utils.toast('เทอม 2: คะแนนรวมหน่วยเกิน 50', 'error');
 
   const records = [];
@@ -562,28 +559,25 @@ async function saveGrades(term) {
     const t2sv = [...tr.querySelectorAll('.sub2')].map(i => i.value);
     records.push({
       studentId: tr.getAttribute('data-sid'),
-      saveTerm,
-      t1_sub:  saveTerm === 1 ? t1sv : null,
-      t1_acc:  saveTerm === 1 ? ScoreLogic.calcKeepFromFlat(1, t1sv) : null,
-      t1_exam: saveTerm === 1 ? (tr.querySelector('.s-t1e')?.value || '') : null,
-      t2_sub:  saveTerm === 2 ? t2sv : null,
-      t2_acc:  saveTerm === 2 ? ScoreLogic.calcKeepFromFlat(2, t2sv) : null,
-      t2_exam: saveTerm === 2 ? (tr.querySelector('.s-t2e')?.value || '') : null,
+      t1_sub:  t1sv,
+      t1_acc:  ScoreLogic.calcKeepFromFlat(1, t1sv),
+      t1_exam: tr.querySelector('.s-t1e')?.value || '',
+      t2_sub:  t2sv,
+      t2_acc:  ScoreLogic.calcKeepFromFlat(2, t2sv),
+      t2_exam: tr.querySelector('.s-t2e')?.value || '',
     });
   });
 
   if (!records.length) return Utils.toast('ยังไม่มีข้อมูล', 'warning');
 
-  const termLabel = `เทอม ${saveTerm}`;
-  Utils.showLoading(`กำลังบันทึกคะแนน${termLabel}...`);
+  Utils.showLoading('กำลังบันทึกคะแนน...');
   try {
     const res = await api('saveGrades', {
       year, classroom: cls, subject: subj,
-      saveTerm,
       config: buildConfigPayload(),
       gradeRecords: records
     });
-    Utils.toast(`✅ บันทึก${termLabel} — ` + res);
+    Utils.toast('✅ ' + res);
   } catch (e) {
     Utils.toast(e.message || 'บันทึกไม่สำเร็จ', 'error');
   }
