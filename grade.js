@@ -149,6 +149,12 @@ async function loadGrades() {
   const year = $('gYear').value, cls = $('gClass').value, subj = $('gSubj').value;
   if (!subj || subj === "-- ไม่พบวิชา --") return Utils.toast('กรุณาเลือกวิชาที่ถูกต้อง', 'error');
 
+  // ── lock selector ───────────────────────────────────────
+  App.loadedSubject = subj;
+  App.loadedClass   = cls;
+  App.loadedYear    = year;
+  _lockSubjectSelector_();
+
   App.isSemMode = false; // ทุกชั้นใช้โหมดรายปี (2 เทอมในไฟล์เดียว)
 
   // ตรวจสอบว่าวิชานี้สอนเฉพาะเทอมใดเทอมหนึ่ง
@@ -533,68 +539,63 @@ function buildConfigPayload() {
   return { t1_acc: ScoreLogic.getUnitsMax(1), t1_exam: ScoreLogic.getExamMax(1), t2_acc: ScoreLogic.getUnitsMax(2), t2_exam: ScoreLogic.getExamMax(2), units: { t1: App.units[1], t2: App.units[2] }, subItems: { t1: [], t2:[] }, rawMax: { t1: 0, t2: 0 }, courseInfo: getCourseInfoForm() };
 }
 
-async function saveGrades() {
+// term = 1 หรือ 2 (บันทึกเฉพาะเทอมนั้น ไม่เขียนทับอีกเทอม)
+async function saveGrades(term) {
   ScoreLogic.syncHiddenInputs();
 
-  if (ScoreLogic.getUnitsMax(1) > (50)) {
-    return Utils.toast(`เทอม 1: คะแนนรวมหน่วยเกิน ${50}`, 'error');
-  }
-  if (ScoreLogic.getUnitsMax(2) > 50) {
+  const subj = App.loadedSubject;
+  const cls  = App.loadedClass  || $('gClass').value;
+  const year = App.loadedYear   || $('gYear').value;
+
+  if (!subj) return Utils.toast('กรุณากดโหลดรายชื่อก่อนบันทึก', 'error');
+
+  const saveTerm = term || App.gradeTerm || 1;
+
+  if (saveTerm === 1 && ScoreLogic.getUnitsMax(1) > 50)
+    return Utils.toast('เทอม 1: คะแนนรวมหน่วยเกิน 50', 'error');
+  if (saveTerm === 2 && ScoreLogic.getUnitsMax(2) > 50)
     return Utils.toast('เทอม 2: คะแนนรวมหน่วยเกิน 50', 'error');
-  }
 
   const records = [];
   $$('#gtBody tr[data-sid]').forEach(tr => {
     const t1sv = [...tr.querySelectorAll('.sub1')].map(i => i.value);
     const t2sv = [...tr.querySelectorAll('.sub2')].map(i => i.value);
-
     records.push({
       studentId: tr.getAttribute('data-sid'),
-      t1_sub: t1sv,
-      t1_acc: ScoreLogic.calcKeepFromFlat(1, t1sv),
-      t1_exam: tr.querySelector('.s-t1e')?.value || '',
-      t2_sub: t2sv,
-      t2_acc: ScoreLogic.calcKeepFromFlat(2, t2sv),
-      t2_exam: tr.querySelector('.s-t2e')?.value || ''
+      saveTerm,
+      t1_sub:  saveTerm === 1 ? t1sv : null,
+      t1_acc:  saveTerm === 1 ? ScoreLogic.calcKeepFromFlat(1, t1sv) : null,
+      t1_exam: saveTerm === 1 ? (tr.querySelector('.s-t1e')?.value || '') : null,
+      t2_sub:  saveTerm === 2 ? t2sv : null,
+      t2_acc:  saveTerm === 2 ? ScoreLogic.calcKeepFromFlat(2, t2sv) : null,
+      t2_exam: saveTerm === 2 ? (tr.querySelector('.s-t2e')?.value || '') : null,
     });
   });
 
-  console.log('saveGrades records =', records);
+  if (!records.length) return Utils.toast('ยังไม่มีข้อมูล', 'warning');
 
-  if (!records.length) {
-    return Utils.toast('ยังไม่มีข้อมูล', 'warning');
-  }
-
-  Utils.showLoading('กำลังบันทึกคะแนน...');
-
+  const termLabel = `เทอม ${saveTerm}`;
+  Utils.showLoading(`กำลังบันทึกคะแนน${termLabel}...`);
   try {
-    const payload = {
-      year: $('gYear').value,
-      classroom: $('gClass').value,
-      subject: $('gSubj').value,
+    const res = await api('saveGrades', {
+      year, classroom: cls, subject: subj,
+      saveTerm,
       config: buildConfigPayload(),
       gradeRecords: records
-    };
-
-    console.log('saveGrades payload =', payload);
-
-    const res = await api('saveGrades', payload);
-
-    console.log('saveGrades response =', res);
-    Utils.toast('✅ ' + res);
+    });
+    Utils.toast(`✅ บันทึก${termLabel} — ` + res);
   } catch (e) {
-    console.error('saveGrades error =', e);
     Utils.toast(e.message || 'บันทึกไม่สำเร็จ', 'error');
   }
-
   Utils.hideLoading();
 }
 
 async function saveConfigOnly() {
-  const subj = $('gSubj').value; if (!subj || subj === "-- ไม่พบวิชา --") return false;
+  const subj = App.loadedSubject || $('gSubj').value;
+  if (!subj || subj === "-- ไม่พบวิชา --") return false;
   if (ScoreLogic.getUnitsMax(1) > 50 || ScoreLogic.getUnitsMax(2) > 50) { Utils.toast('คะแนนรวมเกินเป้าหมาย', 'warning'); return false; }
   Utils.showLoading('กำลังบันทึกการตั้งค่า...');
-  try { await api('saveGrades', { year: $('gYear').value, classroom: $('gClass').value, subject: subj, config: buildConfigPayload(), gradeRecords:[] }); return true; } catch (e) { Utils.toast(e.message, 'error'); return false; } finally { Utils.hideLoading(); }
+  try { await api('saveGrades', { year: App.loadedYear || $('gYear').value, classroom: App.loadedClass || $('gClass').value, subject: subj, config: buildConfigPayload(), gradeRecords:[] }); return true; } catch (e) { Utils.toast(e.message, 'error'); return false; } finally { Utils.hideLoading(); }
 }
 
 async function saveSchoolProfile() {
@@ -639,3 +640,42 @@ function syncStudentsToSubjectSheet_(sheet, students) {
 
 
 window.addEventListener('DOMContentLoaded', () => { try { refreshCourseOverview(); } catch(e) {} });
+
+// ── auto-load เมื่อเลือกวิชา ─────────────────────────────
+function onSubjChange() {
+  const subj = $('gSubj').value;
+  if (!subj) return; // ยังไม่เลือก (ค่าว่าง)
+  loadGrades();
+}
+function _lockSubjectSelector_() {
+  const subj = App.loadedSubject, cls = App.loadedClass, year = App.loadedYear;
+  // ซ่อน sel-bar, แสดง lock bar
+  const selBar  = $('subjSelBar');
+  const lockBar = $('selectorLockBar');
+  if (selBar)  selBar.style.display  = 'none';
+  if (lockBar) {
+    lockBar.style.display = 'flex';
+    if ($('lockBarSubj'))  $('lockBarSubj').textContent  = subj  || '';
+    if ($('lockBarClass')) $('lockBarClass').textContent = cls   || '';
+    if ($('lockBarYear'))  $('lockBarYear').textContent  = year  || '';
+  }
+  // disable dropdown และ gYear เพื่อป้องกันเปลี่ยนค่า
+  ['gClass','gSubj','gYear'].forEach(id => { if ($(id)) $(id).disabled = true; });
+}
+
+function unlockSubjectSelector() {
+  const selBar  = $('subjSelBar');
+  const lockBar = $('selectorLockBar');
+  if (selBar)  selBar.style.display  = '';
+  if (lockBar) lockBar.style.display = 'none';
+  ['gClass','gSubj','gYear'].forEach(id => { if ($(id)) $(id).disabled = false; });
+  // reset dropdown วิชากลับเป็นว่าง (ไม่ auto-select)
+  const sel = $('gSubj');
+  if (sel) sel.value = '';
+  // ล้าง loaded state
+  App.loadedSubject = null;
+  App.loadedClass   = null;
+  App.loadedYear    = null;
+  // ซ่อน grade panel
+  if ($('gradePanel')) $('gradePanel').style.display = 'none';
+}
