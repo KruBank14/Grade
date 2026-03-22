@@ -91,11 +91,13 @@ function switchGradeTerm(term) {
   }
   // อัปเดต dropdown เฉพาะเมื่อไม่ได้ล็อกอยู่
   if (!App.loadedSubject) updateSubjDrop();
-  // rebuild ตารางตามเทอมใหม่ (ถ้าวิชาไม่มีเลขท้าย)
-  if (App.students && App.students.length) {
+
+  // rebuild ตารางเฉพาะกรณีวิชามีเลขท้าย (subjOnlyTerm 1 หรือ 2)
+  // วิชาทั่วไป (subjOnlyTerm = 0) แสดงทั้ง 2 เทอมอยู่แล้ว ไม่ต้อง rebuild
+  if (App.students && App.students.length && App.subjOnlyTerm !== 0) {
     const subj = App.loadedSubject || $('gSubj')?.value || '';
     const hasNum = /\s\d+$/.test(subj);
-    if (!hasNum) {
+    if (hasNum) {
       App.subjOnlyTerm = term;
       if (typeof buildTable === 'function') buildTable();
     }
