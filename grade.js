@@ -1,7 +1,7 @@
 // 6. SCORE MATH & LOGIC
 // =====================================================
 const ScoreLogic = {
-  getTarget: t => 50,
+  getTarget: () => (String(App.loadedClass||'').startsWith('ม.') ? 100 : 50),
   getUnitsMax: t => (App.units[t] ||[]).reduce((s, u) => s + (Number(u.max) || 0), 0),
   getExamMax: t => Math.max(0, ScoreLogic.getTarget(t) - ScoreLogic.getUnitsMax(t)),
   getUnitRawMax: (t, uIdx) => ((App.units[t][uIdx] || {}).items ||[]).reduce((s, i) => s + (Number(i.max) || 0), 0),
@@ -155,8 +155,8 @@ async function loadGrades() {
   App.loadedYear    = year;
   _lockSubjectSelector_();
 
-  App.isSemMode    = false;
-  App.subjOnlyTerm = 0; // ทุกวิชาแสดง + บันทึกทั้ง 2 เทอมเสมอ
+  App.isSemMode  = false;
+  App.activeTerm = App.gradeTerm || 1; // เทอมที่กำลังแสดง
 
   $('lblClass').textContent = cls; $('lblSubj').textContent = subj;
   Utils.showLoading('กำลังโหลดข้อมูล...');
@@ -180,7 +180,6 @@ async function loadGrades() {
 
     normalizeUnits(1); normalizeUnits(2); renderSubList(1); renderSubList(2);
 
-    // ทุกวิชาแสดงทั้ง 2 เทอม
     if ($('tabTerm2Btn')) $('tabTerm2Btn').style.display = 'flex';
     if ($('t2AutoBlock')) $('t2AutoBlock').style.display = 'flex';
     refreshUnitPanelLabels(); updateAutoScoreDisplay(); refreshCourseOverview();
@@ -252,7 +251,15 @@ async function loadGrades() {
 // =====================================================
 // 8. TABLE GENERATOR
 // =====================================================
-function buildTable() { buildHead(); buildBody(); $('gtbl').classList.remove('t1-collapsed', 't2-collapsed'); App.expanded = { 1: true, 2: true }; }
+function buildTable() {
+  buildHead(); buildBody();
+  $('gtbl').classList.remove('t1-collapsed', 't2-collapsed');
+  App.expanded = { 1: true, 2: true };
+  // sync ปุ่มบันทึก
+  const t = App.activeTerm || 1;
+  const saveBtn = document.querySelector('.btn-save');
+  if (saveBtn) saveBtn.textContent = `💾 บันทึกเทอม ${t}`;
+}
 
 function buildHead() {
   ScoreLogic.syncHiddenInputs();
@@ -277,11 +284,10 @@ function buildHead() {
     });
   };
 
-  addTermHeaders(1);
-  addTermHeaders(2);
-  r1 += `<th rowspan="3" class="th-sum-keep" style="width:80px;">รวมเก็บ<br><small>(ท.1+ท.2)</small><br><small style="opacity:.8;">(${ScoreLogic.getUnitsMax(1)+ScoreLogic.getUnitsMax(2)})</small></th>
-         <th rowspan="3" class="th-sum-exam" style="width:80px;">รวมสอบ<br><small>(ท.1+ท.2)</small><br><small style="opacity:.8;">(${ScoreLogic.getExamMax(1)+ScoreLogic.getExamMax(2)})</small></th>
-         <th rowspan="3" class="th-grand" style="width:74px;">รวม<br>ทั้งปี</th>`;
+  const t = App.activeTerm || 1;
+  addTermHeaders(t);
+  r1 += `<th rowspan="3" class="th-grand" style="width:74px;">รวม<br><small>(${ScoreLogic.getTarget()})</small></th>
+         <th rowspan="3" style="width:65px;background:#4f46e5;color:#fff;font-size:15px;border-right:1px solid rgba(255,255,255,.12);vertical-align:middle;">เกรด</th>`;
   r1 += `<th rowspan="3" style="width:65px;background:#4f46e5;color:#fff;font-size:15px;border-right:1px solid rgba(255,255,255,.12);vertical-align:middle;">เกรด</th>`;
   $('gtHead').innerHTML = `<tr>${r1}</tr><tr>${r2}</tr><tr>${r3}</tr>`;
 }
@@ -310,23 +316,25 @@ function buildBody() {
     return { cells, keep, exam, total };
   };
 
-  $('gtBody').innerHTML = App.students.map((s, idx) => {
-    const st = s.stats || {};
-    const t1 = buildTermCells(1, s);
-    const t2 = buildTermCells(2, s);
-    const finalScore = t1.total + t2.total;
+  const activeTerm = App.activeTerm || 1;
 
-    let html = `<tr data-sid="${s.studentId}">
-      <td class="s-c0">${idx + 1}</td><td class="s-c1">${s.studentId}</td>
-      <td class="s-c2"><div class="d-flex justify-content-between align-items-center gap-1"><span>${s.name}</span><div class="d-flex gap-1"><button class="btn-sm" style="padding:2px 7px;font-size:0.72rem;background:#ede9fe;color:#6d28d9;border:1px solid #c4b5fd;" onclick="printRowPDF('${s.studentId}','term1')">T1</button><button class="btn-sm" style="padding:2px 8px;font-size:0.75rem;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;" onclick="printRowPDF('${s.studentId}','year')">🖨️</button></div></div></td>
-      <td><span class="sp p">ม ${st.present || 0}</span> <span class="sp a">ข ${st.absent || 0}</span> <span class="sp l">ล ${st.leave || 0}</span></td>
-      ${t1.cells}${t2.cells}
-      <td class="td-sum-keep"><span class="sbadge-keep sum-keep">${Math.round((t1.keep + t2.keep)*100)/100 || '-'}</span></td>
-      <td class="td-sum-exam"><span class="sbadge-exam sum-exam">${t1.exam + t2.exam || '-'}</span></td>
-      <td><span class="gbadge ${finalScore === 0 ? 'nil' : finalScore < 50 ? 'fail' : 'ok'} gtot">${finalScore || '-'}</span></td>
-      <td style="background:#f8fafc;"><span class="gbadge ${finalScore === 0 ? 'nil' : finalScore < 50 ? 'fail' : 'ok'} final-grade" style="font-size:1.05rem;border:2px solid #c7d2fe;min-width:48px;">${finalScore === 0 ? '-' : Utils.calcGradeFrontend(finalScore)}</span></td>
+  $('gtBody').innerHTML = App.students.map((s, idx) => {
+    const st  = s.stats || {};
+    const tc  = buildTermCells(activeTerm, s);
+    const finalScore = tc.total;
+
+    return `<tr data-sid="${s.studentId}">
+      <td class="s-c0">${idx + 1}</td>
+      <td class="s-c1">${s.studentId}</td>
+      <td class="s-c2"><div class="d-flex justify-content-between align-items-center gap-1"><span>${s.name}</span><div class="d-flex gap-1">
+        <button class="btn-sm" style="padding:2px 7px;font-size:0.72rem;background:#ede9fe;color:#6d28d9;border:1px solid #c4b5fd;" onclick="printRowPDF('${s.studentId}','term1')">T1</button>
+        <button class="btn-sm" style="padding:2px 8px;font-size:0.75rem;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;" onclick="printRowPDF('${s.studentId}','year')">🖨️</button>
+      </div></div></td>
+      <td><span class="sp p">ม ${st.present||0}</span> <span class="sp a">ข ${st.absent||0}</span> <span class="sp l">ล ${st.leave||0}</span></td>
+      ${tc.cells}
+      <td><span class="gbadge ${finalScore===0?'nil':finalScore<(ScoreLogic.getTarget()*0.5)?'fail':'ok'} gtot">${finalScore||'-'}</span></td>
+      <td style="background:#f8fafc;"><span class="gbadge ${finalScore===0?'nil':finalScore<(ScoreLogic.getTarget()*0.5)?'fail':'ok'} final-grade" style="font-size:1.05rem;border:2px solid #c7d2fe;min-width:48px;">${finalScore===0?'-':Utils.calcGradeFrontend(finalScore)}</span></td>
     </tr>`;
-    return html;
   }).join('');
   refreshAllScoreInputStates($('gtBody'));
 }
@@ -375,18 +383,16 @@ function calcExam(el) {
 }
 
 function recalcTots(tr) {
+  const t = App.activeTerm || 1;
   const getVal = (sel) => Number(tr.querySelector(sel)?.textContent || tr.querySelector(sel)?.value || 0);
-  const t1s = getVal('.t1sc'), t2s = getVal('.t2sc'), t1e = getVal('.s-t1e'), t2e = getVal('.s-t2e');
-  const t1t = t1s + t1e, t2t = t2s + t2e, grand = t1t + t2t;
-  const upd = (sel, val, cls) => { const e = tr.querySelector(sel); if(e) { e.textContent = val||'-'; e.className = cls; } };
+  const keep = getVal(`.t${t}sc`), exam = getVal(`.s-t${t}e`), total = keep + exam;
+  const tgt  = ScoreLogic.getTarget();
+  const upd  = (sel, val, cls) => { const e = tr.querySelector(sel); if(e){e.textContent=val||'-';e.className=cls;} };
 
-  upd('.t1tot',    t1t,   `tbadge ${t1t===0?'nil':'ok'} t1tot`);
-  upd('.t2tot',    t2t,   `tbadge ${t2t===0?'nil':'ok'} t2tot`);
-  upd('.gtot',     grand, `gbadge ${grand===0?'nil':grand<50?'fail':'ok'} gtot`);
-  upd('.sum-keep', Math.round((t1s+t2s)*100)/100, `sbadge-keep sum-keep`);
-  upd('.sum-exam', t1e+t2e, `sbadge-exam sum-exam`);
-  upd('.final-grade', grand===0?'-':Utils.calcGradeFrontend(grand),
-      `gbadge ${grand===0?'nil':grand<50?'fail':'ok'} final-grade`);
+  upd(`.t${t}tot`, total, `tbadge ${total===0?'nil':'ok'} t${t}tot`);
+  upd('.gtot',      total, `gbadge ${total===0?'nil':total<tgt*0.5?'fail':'ok'} gtot`);
+  upd('.final-grade', total===0?'-':Utils.calcGradeFrontend(total),
+      `gbadge ${total===0?'nil':total<tgt*0.5?'fail':'ok'} final-grade`);
 }
 
 function applySubConfig() {
@@ -487,76 +493,60 @@ async function saveGrades() {
   ScoreLogic.syncHiddenInputs();
 
   const subj = App.loadedSubject;
-  const cls  = App.loadedClass  || $('gClass').value;
-  const year = App.loadedYear   || $('gYear').value;
+  const cls  = App.loadedClass || $('gClass').value;
+  const year = App.loadedYear  || $('gYear').value;
+  const t    = App.activeTerm  || 1;
 
   if (!subj) return Utils.toast('กรุณาเลือกวิชาก่อนบันทึก', 'error');
 
-  if (ScoreLogic.getUnitsMax(1) > 50)
-    return Utils.toast('เทอม 1: คะแนนรวมหน่วยเกิน 50', 'error');
-  if (ScoreLogic.getUnitsMax(2) > 50)
-    return Utils.toast('เทอม 2: คะแนนรวมหน่วยเกิน 50', 'error');
+  const tgt = ScoreLogic.getTarget();
+  if (ScoreLogic.getUnitsMax(t) > tgt)
+    return Utils.toast(`เทอม ${t}: คะแนนรวมหน่วยเกิน ${tgt}`, 'error');
 
-  // สร้าง snapshot จาก App.students (ข้อมูลที่โหลดมาล่าสุด) เป็น fallback
-  // กรณีที่เทอมใดเทอมหนึ่งไม่มี DOM input (วิชาเลขท้ายแสดงเทอมเดียว)
+  // snapshot สำหรับเทอมที่ไม่ได้แสดง (เพื่อไม่เขียนทับ)
   const stuMap = {};
   (App.students || []).forEach(s => { stuMap[s.studentId] = s.grades || {}; });
 
   const records = [];
   $$('#gtBody tr[data-sid]').forEach(tr => {
-    const sid = tr.getAttribute('data-sid');
-    const snap = stuMap[sid] || {}; // ข้อมูลเดิมจาก server
+    const sid  = tr.getAttribute('data-sid');
+    const snap = stuMap[sid] || {};
+    const other = t === 1 ? 2 : 1;
 
-    // เทอม 1: อ่านจาก DOM ก่อน ถ้าไม่มี input ใช้ค่าเดิม
-    const t1Inputs = [...tr.querySelectorAll('.sub1')];
-    const t1sv = t1Inputs.length > 0
-      ? t1Inputs.map(i => i.value)
-      : (Array.isArray(snap.t1_sub) ? snap.t1_sub : []);
-    const t1_acc  = t1Inputs.length > 0
-      ? ScoreLogic.calcKeepFromFlat(1, t1sv)
-      : (Number(snap.t1_acc) || 0);
-    const t1ExamEl = tr.querySelector('.s-t1e');
-    const t1_exam = t1ExamEl
-      ? (t1ExamEl.value || '')
-      : (snap.t1_exam ?? '');
+    // อ่านค่าจาก DOM ของเทอมที่แสดงอยู่
+    const subVals = [...tr.querySelectorAll(`.sub${t}`)].map(i => i.value);
+    const acc     = ScoreLogic.calcKeepFromFlat(t, subVals);
+    const examEl  = tr.querySelector(`input[data-term="${t}"][data-type="exam"]`);
+    const examVal = examEl ? examEl.value : '';
 
-    // เทอม 2: อ่านจาก DOM ก่อน ถ้าไม่มี input ใช้ค่าเดิม
-    const t2Inputs = [...tr.querySelectorAll('.sub2')];
-    const t2sv = t2Inputs.length > 0
-      ? t2Inputs.map(i => i.value)
-      : (Array.isArray(snap.t2_sub) ? snap.t2_sub : []);
-    const t2_acc  = t2Inputs.length > 0
-      ? ScoreLogic.calcKeepFromFlat(2, t2sv)
-      : (Number(snap.t2_acc) || 0);
-    const t2ExamEl = tr.querySelector('.s-t2e');
-    const t2_exam = t2ExamEl
-      ? (t2ExamEl.value || '')
-      : (snap.t2_exam ?? '');
+    // ใช้ snapshot สำหรับเทอมอื่น
+    const oAcc  = Number(snap[`t${other}_acc`])  || 0;
+    const oExam = snap[`t${other}_exam`]  ?? '';
+    const oSub  = Array.isArray(snap[`t${other}_sub`]) ? snap[`t${other}_sub`] : [];
 
-    records.push({ studentId: sid, t1_sub: t1sv, t1_acc, t1_exam, t2_sub: t2sv, t2_acc, t2_exam });
+    records.push(t === 1
+      ? { studentId: sid, t1_sub: subVals, t1_acc: acc, t1_exam: examVal, t2_sub: oSub, t2_acc: oAcc, t2_exam: oExam }
+      : { studentId: sid, t1_sub: oSub, t1_acc: oAcc, t1_exam: oExam, t2_sub: subVals, t2_acc: acc, t2_exam: examVal }
+    );
   });
 
   if (!records.length) return Utils.toast('ยังไม่มีข้อมูล', 'warning');
 
-  Utils.showLoading('กำลังบันทึกคะแนน...');
+  Utils.showLoading(`กำลังบันทึกคะแนนเทอม ${t}...`);
   try {
     const res = await api('saveGrades', {
       year, classroom: cls, subject: subj,
       config: buildConfigPayload(),
       gradeRecords: records
     });
-    // อัปเดต snapshot ให้ตรงกับที่เพิ่งบันทึก
+    // อัปเดต snapshot
     records.forEach(rec => {
-      if (stuMap[rec.studentId]) {
-        stuMap[rec.studentId].t1_sub  = rec.t1_sub;
-        stuMap[rec.studentId].t1_acc  = rec.t1_acc;
-        stuMap[rec.studentId].t1_exam = rec.t1_exam;
-        stuMap[rec.studentId].t2_sub  = rec.t2_sub;
-        stuMap[rec.studentId].t2_acc  = rec.t2_acc;
-        stuMap[rec.studentId].t2_exam = rec.t2_exam;
-      }
+      if (stuMap[rec.studentId]) Object.assign(stuMap[rec.studentId], {
+        t1_sub: rec.t1_sub, t1_acc: rec.t1_acc, t1_exam: rec.t1_exam,
+        t2_sub: rec.t2_sub, t2_acc: rec.t2_acc, t2_exam: rec.t2_exam
+      });
     });
-    Utils.toast('✅ ' + res);
+    Utils.toast(`✅ บันทึกเทอม ${t} — ` + res);
   } catch (e) {
     Utils.toast(e.message || 'บันทึกไม่สำเร็จ', 'error');
   }
