@@ -415,84 +415,100 @@ function toggleClubMember(sid, name, classroom) {
   if (Club.loaded) _renderClubStudentPicker();
 }
 
-// ── ส่วนบันทึกกิจกรรม (เหมือน guidance) ─────────────
+// ── ส่วนบันทึกกิจกรรม (เหมือนแนะแนว) ──────────────
 function _renderClubActivity() {
   const wrap = $('clubActivitySection'); if (!wrap) return;
-  const dates   = Club.dates;
-  const nDates  = dates.length;
-  const topics  = Club.topics.length === nDates ? Club.topics : Array(nDates).fill('');
-  Club.topics   = topics;
+  const dates  = Club.dates;
+  const nDates = dates.length;
+  // sync topics ให้ตรงกับจำนวนวัน
+  if (Club.topics.length !== nDates) {
+    const old = Club.topics.slice();
+    Club.topics = Array(nDates).fill('').map((_, i) => old[i] || '');
+  }
+  const topics  = Club.topics;
   const members = Club.members;
+  const MONTHS  = ['','ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
 
   const noTermDates = !App.termDates || !App.termDates['t' + Club.term + '_start'];
+  if (noTermDates) {
+    wrap.innerHTML = `<div style="font-size:13px;color:#d97706;padding:8px;background:#fef3c7;border-radius:6px;border:1px solid #fde68a;margin-bottom:12px;">
+      ⚠️ ยังไม่พบวันเปิด-ปิดเทอม — กรุณาโหลดตารางคะแนนก่อน</div>`;
+    return;
+  }
+  if (!members.length) { wrap.innerHTML = ''; return; }
 
-  // ── ส่วน 1: ตารางบันทึกหัวข้อกิจกรรม ──
-  const actRows = dates.map((d, i) =>
-    `<tr>
-      <td style="text-align:center;border:1px solid #fde68a;padding:5px;color:#92400e;font-size:.8rem;">${i+1}</td>
-      <td style="border:1px solid #fde68a;padding:4px 8px;text-align:center;color:#6d28d9;font-size:.82rem;white-space:nowrap;">${_clubShortDate(d)}</td>
-      <td style="border:1px solid #fde68a;padding:2px 4px;">
-        <input type="text" class="club-topic" data-idx="${i}" value="${topics[i]||''}"
+  // ── ส่วน 1: บันทึกหัวข้อกิจกรรม ──
+  const actRows = dates.map((d, i) => {
+    const tv = topics[i] || '';
+    const hr = Club.teacher || '';
+    return `<tr>
+      <td style="text-align:center;border:1px solid #e2e8f0;padding:5px;color:#94a3b8;font-size:.8rem;">${i+1}</td>
+      <td style="border:1px solid #e2e8f0;padding:4px 6px;text-align:center;font-size:.82rem;color:#92400e;white-space:nowrap;">${_clubShortDate(d)}</td>
+      <td style="border:1px solid #e2e8f0;padding:2px 4px;">
+        <input type="text" class="club-topic" data-idx="${i}" value="${tv}"
           placeholder="หัวข้อกิจกรรม..."
           oninput="Club.topics[${i}]=this.value"
           style="width:100%;border:none;background:transparent;font-family:inherit;font-size:.84rem;padding:4px 6px;outline:none;">
       </td>
-    </tr>`
-  ).join('');
+      <td style="border:1px solid #e2e8f0;padding:2px 4px;">
+        <input type="text" class="club-teacher-inp" data-idx="${i}" value="${hr}"
+          placeholder="ครูที่ปรึกษา..."
+          oninput="Club.teacher=this.value"
+          style="width:100%;border:none;background:transparent;font-family:inherit;font-size:.84rem;padding:4px 6px;outline:none;">
+      </td>
+    </tr>`;
+  }).join('');
 
-  // ── ส่วน 2: header วันที่/ครั้งที่ ──
-  const colHeaders = dates.map((d, i) => {
+  // ── ส่วน 2: header วันที่ (แนวตั้ง) ──
+  const dateHeaders = dates.map(d => {
     const p = d.split('/');
-    return `<th style="width:26px;vertical-align:bottom;padding-bottom:4px;border:1px solid #fde68a;background:#fefce8;">
-      <div style="writing-mode:vertical-rl;transform:rotate(180deg);font-size:10px;font-weight:600;color:#92400e;white-space:nowrap;height:70px;">
-        ${parseInt(p[0])} ${['','ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'][parseInt(p[1])]} ${p[2].slice(-2)}
-      </div>
-    </th>`;
+    return `<th style="width:22px;vertical-align:bottom;padding-bottom:4px;border:1px solid #e2e8f0;background:#f8fafc;">
+      <div style="writing-mode:vertical-rl;transform:rotate(180deg);font-size:10px;font-weight:600;color:#92400e;white-space:nowrap;">
+        ${parseInt(p[0])} ${MONTHS[parseInt(p[1])]} ${p[2].slice(-2)}
+      </div></th>`;
   }).join('');
 
   // ── ส่วน 2: แถวนักเรียน ──
-  const attRows = members.map((m, idx) => {
+  const bodyRows = members.map((m, idx) => {
     const att = Club.attMap[m.studentId] || Array(nDates).fill('ป');
     while (att.length < nDates) att.push('ป');
-    Club.attMap[m.studentId] = att;
+    Club.attMap[m.studentId] = att.slice(0, nDates);
 
     const nP    = att.filter(v => v === 'ป').length;
     const nBase = att.filter(v => v !== '-').length;
     const result = Club.resultMap[m.studentId] ||
       (nBase > 0 && nP >= Math.ceil(nBase * 0.8) ? 'ผ่าน' : 'ไม่ผ่าน');
 
-    const cells = att.slice(0, nDates).map((v, i) => {
-      const st = v === 'ข'
-        ? { bg:'#fee2e2', cl:'#dc2626', lb:'ข' }
-        : v === 'ล'
-          ? { bg:'#fef3c7', cl:'#b45309', lb:'ล' }
-          : { bg:'#f0fdf4', cl:'#166534', lb:'✓' };
-      return `<td class="club-day-cell" data-sid="${m.studentId}" data-idx="${i}" data-flag="${v}"
-        onclick="cycleClubDay(this)"
-        style="width:26px;text-align:center;cursor:pointer;border:1px solid #fde68a;padding:3px 0;
-               font-size:12px;font-weight:700;background:${st.bg};color:${st.cl};user-select:none;">
-        ${st.lb}
-      </td>`;
-    }).join('');
-
-    const rBg = result==='ผ่าน'?'#dcfce7':'#fee2e2';
     const rCl = result==='ผ่าน'?'#16a34a':'#dc2626';
+    const rBg = result==='ผ่าน'?'#dcfce7':'#fee2e2';
     const rBd = result==='ผ่าน'?'#86efac':'#fca5a5';
 
+    function attSt(v) {
+      if (v==='ข') return {bg:'#fee2e2',cl:'#dc2626',lb:'ข'};
+      if (v==='ล') return {bg:'#fef3c7',cl:'#b45309',lb:'ล'};
+      if (v==='-') return {bg:'#f8fafc',cl:'#94a3b8',lb:'-'};
+      return {bg:'#f0fdf4',cl:'#166534',lb:'✓'};
+    }
+
+    const cells = att.slice(0, nDates).map((v, i) => {
+      const st = attSt(v);
+      return `<td class="club-day-cell" data-sid="${m.studentId}" data-idx="${i}" data-flag="${v}"
+        onclick="cycleClubDay(this)"
+        style="width:22px;min-width:22px;text-align:center;cursor:pointer;border:1px solid #e2e8f0;
+               padding:2px 0;font-size:12px;font-weight:700;background:${st.bg};color:${st.cl};
+               user-select:none;transition:background .1s;">${st.lb}</td>`;
+    }).join('');
+
     return `<tr data-sid="${m.studentId}">
-      <td style="text-align:center;border:1px solid #fde68a;padding:4px;font-size:.78rem;color:#9ca3af;
-                 position:sticky;left:0;background:#fff;min-width:28px;">${idx+1}</td>
-      <td style="border:1px solid #fde68a;padding:5px 8px;font-weight:600;font-size:.82rem;white-space:nowrap;
-                 position:sticky;left:28px;background:#fff;min-width:150px;border-right:2px solid #fde68a;">${m.name}
-        <span style="font-size:10px;color:#9ca3af;font-weight:400;"> ${m.classroom}</span>
+      <td style="text-align:center;border:1px solid #e2e8f0;padding:4px;position:sticky;left:0;z-index:10;background:#fff;font-size:.78rem;color:#94a3b8;min-width:28px;">${idx+1}</td>
+      <td class="ass-name" style="text-align:left;border:1px solid #e2e8f0;padding:5px 8px;position:sticky;left:28px;z-index:10;background:#fff;white-space:nowrap;font-weight:600;min-width:160px;border-right:2px solid #fde68a;">
+        ${m.name} <span style="font-size:10px;color:#9ca3af;font-weight:400;">${m.classroom}</span>
       </td>
       ${cells}
-      <td class="club-total-val" style="text-align:center;font-weight:700;color:#0369a1;background:#eff6ff;
-                                        border:1px solid #fde68a;padding:4px 6px;min-width:44px;">${nP}/${nBase}</td>
-      <td style="text-align:center;border:1px solid #fde68a;padding:3px 4px;">
+      <td class="club-total-val" style="text-align:center;font-weight:700;color:#0369a1;background:#eff6ff;border:1px solid #e2e8f0;padding:4px 6px;white-space:nowrap;min-width:48px;">${nP}/${nBase}</td>
+      <td style="text-align:center;border:1px solid #e2e8f0;padding:3px 4px;">
         <select class="club-result"
-          style="width:84px;padding:3px;font-size:.76rem;font-weight:700;font-family:inherit;
-                 background:${rBg};color:${rCl};border:1.5px solid ${rBd};border-radius:6px;"
+          style="width:88px;padding:3px 4px;font-size:.78rem;font-weight:700;background:${rBg};color:${rCl};border:1.5px solid ${rBd};border-radius:6px;font-family:inherit;"
           onchange="Club.resultMap['${m.studentId}']=this.value;
                     this.style.background=this.value==='ผ่าน'?'#dcfce7':'#fee2e2';
                     this.style.color=this.value==='ผ่าน'?'#16a34a':'#dc2626';
@@ -505,56 +521,48 @@ function _renderClubActivity() {
   }).join('');
 
   wrap.innerHTML = `
-    ${nDates > 0 ? `
-    <div style="margin-bottom:14px;">
-      <div style="font-weight:700;font-size:.86rem;color:#92400e;padding:8px 12px;
-                  background:#fef3c7;border-radius:8px 8px 0 0;border:1px solid #fde68a;border-bottom:none;">
-        📝 บันทึกหัวข้อกิจกรรม (${nDates} ครั้ง)
+    <div style="margin-bottom:16px;">
+      <div style="font-weight:700;font-size:.88rem;color:#92400e;padding:8px 12px;background:#fef3c7;border-radius:8px 8px 0 0;border:1px solid #fde68a;border-bottom:none;">
+        📋 บันทึกกิจกรรมชุมนุม ภาคเรียนที่ ${Club.term} (${nDates} ครั้ง)
       </div>
-      <div style="border:1px solid #fde68a;border-radius:0 0 8px 8px;overflow:auto;max-height:200px;">
-        <table style="width:100%;border-collapse:collapse;font-size:.84rem;">
-          <thead style="position:sticky;top:0;background:#fefce8;">
+      <div style="border:1px solid #fde68a;border-radius:0 0 8px 8px;overflow:auto;max-height:260px;">
+        <table style="width:100%;border-collapse:collapse;font-size:.84rem;min-width:500px;">
+          <thead style="position:sticky;top:0;z-index:10;background:#fef9ee;">
             <tr>
-              <th style="width:46px;border:1px solid #fde68a;padding:6px;">ครั้งที่</th>
-              <th style="width:90px;border:1px solid #fde68a;padding:6px;">วันที่</th>
-              <th style="border:1px solid #fde68a;padding:6px;text-align:left;">หัวข้อกิจกรรม</th>
+              <th style="width:40px;border:1px solid #e2e8f0;padding:7px 4px;">ครั้งที่</th>
+              <th style="width:90px;border:1px solid #e2e8f0;padding:7px 4px;">วันที่</th>
+              <th style="border:1px solid #e2e8f0;padding:7px 8px;text-align:left;">หัวข้อกิจกรรม</th>
+              <th style="width:200px;border:1px solid #e2e8f0;padding:7px 8px;text-align:left;">ครูที่ปรึกษา</th>
             </tr>
           </thead>
           <tbody>${actRows}</tbody>
         </table>
       </div>
-    </div>` : ''}
+    </div>
 
-
-
-    ${noTermDates ? `
-    <div style="font-size:13px;color:#d97706;padding:8px;background:#fef3c7;border-radius:6px;border:1px solid #fde68a;">
-      ⚠️ ยังไม่พบวันเปิด-ปิดเทอม — กรุณาโหลดตารางคะแนนก่อน หรือเลือกชั้นเรียนให้ถูกต้อง
-    </div>` : members.length > 0 && nDates > 0 ? `
     <div>
-      <div style="font-weight:700;font-size:.86rem;color:#0369a1;padding:8px 12px;
-                  background:#eff6ff;border-radius:8px 8px 0 0;border:1px solid #bae6fd;border-bottom:none;">
-        ✅ ตารางการเข้าร่วม <span style="font-weight:400;color:#64748b;font-size:.72rem;">(${nDates} ครั้ง — คลิก: ✓มา → ขขาด → ลลา)</span>
+      <div style="font-weight:700;font-size:.88rem;color:#0369a1;padding:8px 12px;background:#eff6ff;border-radius:8px 8px 0 0;border:1px solid #bae6fd;border-bottom:none;">
+        ✅ ตารางการเข้าร่วม ภาคเรียนที่ ${Club.term}
+        <span style="font-size:.75rem;font-weight:400;color:#64748b;margin-left:8px;">(คลิก: ✓มา → ขขาด → ลลา)</span>
       </div>
       <div style="border:1px solid #bae6fd;border-radius:0 0 8px 8px;overflow:auto;max-height:55vh;">
-        <table style="border-collapse:collapse;font-size:.82rem;width:max-content;min-width:100%;">
+        <table style="border-collapse:collapse;font-size:.84rem;width:max-content;min-width:100%;">
           <thead style="position:sticky;top:0;z-index:20;background:#f0f9ff;">
             <tr>
-              <th rowspan="2" style="width:28px;position:sticky;left:0;z-index:30;background:#f0f9ff;border:1px solid #fde68a;">ที่</th>
-              <th rowspan="2" style="min-width:150px;text-align:left;padding-left:8px;position:sticky;left:28px;z-index:30;background:#f0f9ff;border:1px solid #fde68a;border-right:2px solid #fde68a;">ชื่อ-นามสกุล</th>
-              <th colspan="${nDates}" style="border:1px solid #fde68a;background:#fef3c7;font-size:.8rem;">วันที่เข้าร่วมกิจกรรม</th>
-              <th rowspan="2" style="width:50px;border:1px solid #fde68a;background:#eff6ff;font-size:.76rem;">มา/รวม</th>
-              <th rowspan="2" style="width:86px;border:1px solid #fde68a;background:#f0fdf4;font-size:.76rem;">ผลประเมิน</th>
+              <th rowspan="2" style="width:28px;position:sticky;left:0;z-index:30;background:#f0f9ff;border:1px solid #e2e8f0;">ที่</th>
+              <th rowspan="2" style="min-width:160px;text-align:left;padding-left:8px;position:sticky;left:28px;z-index:30;background:#f0f9ff;border:1px solid #e2e8f0;border-right:2px solid #fde68a;">ชื่อ-นามสกุล</th>
+              <th colspan="${nDates}" style="border:1px solid #e2e8f0;background:#e0f2fe;font-size:.8rem;">วันที่เข้าร่วมกิจกรรม</th>
+              <th rowspan="2" style="width:54px;border:1px solid #e2e8f0;background:#eff6ff;font-size:.78rem;">มา/รวม</th>
+              <th rowspan="2" style="width:90px;border:1px solid #e2e8f0;background:#f0fdf4;">ผลประเมิน</th>
             </tr>
-            <tr style="height:70px;">${colHeaders}</tr>
+            <tr style="height:90px;">${dateHeaders}</tr>
           </thead>
-          <tbody id="clubAttBody">${attRows}</tbody>
+          <tbody id="clubAttBody">${bodyRows}</tbody>
         </table>
       </div>
-    </div>` : members.length > 0 ? `<div style="font-size:13px;color:#9ca3af;padding:8px 0;">ยังไม่พบวันกิจกรรม — ตรวจสอบวันเรียนและช่วงเทอม</div>` : ''}
+    </div>
   `;
 }
-
 // ── toggle มา/ขาด/ลา ────────────────────────────────
 function cycleClubDay(cell) {
   const CY = { 'ป':'ข', 'ข':'ล', 'ล':'ป', '':'ป' };
