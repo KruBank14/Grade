@@ -68,39 +68,64 @@ async function adminSetup() {
   Utils.hideLoading();
 }
 
+// ── กรองวิชาตามเทอม ──────────────────────────────────
+// วิชาที่มีเลขท้าย: เลขคี่ = เทอม 1, เลขคู่ = เทอม 2
+// วิชาที่ไม่มีเลข: แสดงทั้ง 2 เทอม
+function _subjMatchesTerm(subjectName, term) {
+  const m = String(subjectName).match(/\s+(\d+)\s*$/);
+  if (!m) return true;           // ไม่มีเลข → แสดงทุกเทอม
+  const n = parseInt(m[1]);
+  return term === 1 ? (n % 2 === 1) : (n % 2 === 0);
+}
+
+function switchGradeTerm(term) {
+  App.gradeTerm = term;
+  // อัปเดต style ปุ่ม
+  const active   = { background: '#6d28d9', color: '#fff' };
+  const inactive = { background: '#f1f5f9', color: '#64748b' };
+  const btn1 = $('termTab1'), btn2 = $('termTab2');
+  if (btn1) Object.assign(btn1.style, term === 1 ? active : inactive);
+  if (btn2) Object.assign(btn2.style, term === 2 ? active : inactive);
+  updateSubjDrop();
+}
+
 function updateSubjDrop() {
-  // .trim() เพื่อตัดช่องว่างที่อาจแอบซ่อนอยู่ออก
-  const cls = $('gClass').value.trim(); 
-  const sel = $('gSubj'); 
+  if (!App.gradeTerm) App.gradeTerm = 1;
+  const term = App.gradeTerm;
+  const cls  = $('gClass').value.trim();
+  const sel  = $('gSubj');
   if (!sel) return;
   sel.innerHTML = '';
+
+  let allSubs = [];
 
   if (App.user?.isAdmin) {
     if (!$('gClass').options.length) {
       $('gClass').innerHTML = CONFIG.ALL_CLS.map(c => `<option value="${c}">${c}</option>`).join('');
     }
-    (App.subs[cls] ||[]).forEach(s => sel.innerHTML += `<option value="${s}">${s}</option>`);
+    allSubs = App.subs[cls] || [];
   } else {
-    // กรองและตัดคำแบบเซฟที่สุด ป้องกันบั๊กกรณีฐานข้อมูลพิมพ์เว้นวรรคติดมา
-    const mySubs = App.user?.mySubjects ||[];
-    const f = mySubs
-      .map(s => s.trim()) // ตัดช่องว่างหัวท้ายของชุดข้อความก่อน
+    const mySubs = App.user?.mySubjects || [];
+    allSubs = mySubs
+      .map(s => s.trim())
       .filter(s => {
-         const parts = s.split('_');
-         // เช็คว่าส่วนแรก (ชื่อชั้น) ตรงกับ Dropdown ไหม
-         return parts[0] && parts[0].trim() === cls; 
+        const parts = s.split('_');
+        return parts[0] && parts[0].trim() === cls;
       })
       .map(s => {
-         const parts = s.split('_');
-         parts.shift(); // ตัดชื่อชั้นทิ้ง
-         return parts.join('_').trim(); // คืนค่าเฉพาะชื่อวิชา
+        const parts = s.split('_');
+        parts.shift();
+        return parts.join('_').trim();
       });
+  }
 
-    if (f.length > 0) {
-      f.forEach(s => sel.innerHTML += `<option value="${s}">${s}</option>`);
-    } else {
-      sel.innerHTML = '<option value="">-- ไม่พบวิชา --</option>';
-    }
+  // กรองตามเทอม
+  const filtered = allSubs.filter(s => _subjMatchesTerm(s, term));
+
+  if (filtered.length > 0) {
+    filtered.forEach(s => sel.innerHTML += `<option value="${s}">${s}</option>`);
+  } else {
+    sel.innerHTML = '<option value="">-- ไม่พบวิชา --</option>';
   }
 }
 
