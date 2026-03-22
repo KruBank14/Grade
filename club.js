@@ -323,9 +323,16 @@ async function loadSavedClub() {
     // 3. ชุมนุมที่มีสมาชิกมากที่สุด
     let targetClub = '';
     if (myName) {
+      // normalize ช่องว่างหลายตัวเป็นตัวเดียว ก่อนเปรียบเทียบ
+      const normName = myName.replace(/\s+/g, ' ').trim();
       targetClub = clubNames.find(cName => {
-        const teacher = clubTeacherMap[cName] || '';
-        return teacher && (teacher.includes(myName) || myName.includes(teacher));
+        const teacher = (clubTeacherMap[cName] || '').replace(/\s+/g, ' ').trim();
+        if (!teacher) return false;
+        // เปรียบเทียบแบบ fuzzy — ตัดชื่อแรก/นามสกุลออกมาเทียบ
+        const normTeacher = teacher.replace(/\s+/g, ' ').trim();
+        return normTeacher === normName ||
+               normTeacher.includes(normName) ||
+               normName.includes(normTeacher);
       }) || '';
     }
     if (!targetClub && Club.clubName && clubGroups[Club.clubName]) {
