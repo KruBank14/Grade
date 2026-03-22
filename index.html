@@ -485,6 +485,14 @@ body{
   color:var(--primary);
   box-shadow:0 2px 6px rgba(0,0,0,.08);
 }
+.unit-tabs{display:flex;flex-wrap:wrap;gap:6px;}
+.utab{
+  padding:5px 14px;border-radius:8px;border:1.5px solid #ddd6fe;
+  background:#faf5ff;color:#6d28d9;font-weight:700;font-size:.8rem;
+  cursor:pointer;font-family:inherit;transition:all .12s;
+}
+.utab:hover{background:#ede9fe;border-color:#a78bfa;}
+.utab.on{background:#6d28d9;color:#fff;border-color:#6d28d9;}
 
 .sub-list{display:flex;flex-direction:column;gap:6px;margin-bottom:8px;}
 .sub-row{
@@ -1591,6 +1599,8 @@ body{
       ภาคเรียนที่ 2
     </button>
   </div>
+  <!-- UNIT TABS -->
+  <div id="unitTabsRow" style="margin-bottom:8px;"></div>
   <!-- TABLE -->
   <div class="card" style="padding:11px;">
     <div class="tbl-wrap">
