@@ -2,8 +2,22 @@
 // =====================================================
 const ScoreLogic = {
   getTarget: () => (String(App.loadedClass||'').startsWith('ม.') ? 100 : 50),
-  getUnitsMax: t => (App.units[t] ||[]).reduce((s, u) => s + (Number(u.max) || 0), 0),
-  getExamMax: t => Math.max(0, ScoreLogic.getTarget(t) - ScoreLogic.getUnitsMax(t)),
+  getUnitsMax:     t => (App.units[t]||[]).reduce((s,u) => s+(Number(u.max)||0), 0),
+  getExamUnitsMax: t => (App.examUnits?.[t]||[]).reduce((s,u) => s+(Number(u.max)||0), 0),
+  getExamMax:      t => {
+    const eu = App.examUnits?.[t];
+    if (eu && eu.length > 0) return eu.reduce((s,u) => s+(Number(u.max)||0), 0);
+    return Math.max(0, ScoreLogic.getTarget() - ScoreLogic.getUnitsMax(t));
+  },
+  calcExamFromSubs: (t, examSubVals) => {
+    // คำนวณคะแนนสอบรวมจาก sub items (scale ตาม max ของแต่ละรายการ)
+    let total = 0;
+    (App.examUnits?.[t]||[]).forEach((u, i) => {
+      const raw = Number(examSubVals[i]) || 0;
+      total += raw; // exam items ไม่ scale — กรอกตรงเลย
+    });
+    return Math.round(total * 100) / 100;
+  },
   getUnitRawMax: (t, uIdx) => ((App.units[t][uIdx] || {}).items ||[]).reduce((s, i) => s + (Number(i.max) || 0), 0),
   getUnitOffsets: t => {
     let off = 0;
@@ -67,7 +81,11 @@ function refreshUnitPanelLabels() {
 function switchTerm(t, btn) {
   if (btn?.closest('.ttabs')) btn.closest('.ttabs').querySelectorAll('.ttab').forEach(b => b.classList.remove('on'));
   if (btn) btn.classList.add('on');
-  $('subPanel_1').style.display = t === 1 ? '' : 'none'; $('subPanel_2').style.display = t === 2 ? '' : 'none';
+  $('subPanel_1').style.display  = t === 1 ? '' : 'none';
+  $('subPanel_2').style.display  = t === 2 ? '' : 'none';
+  if ($('examPanel_1')) $('examPanel_1').style.display = t === 1 ? '' : 'none';
+  if ($('examPanel_2')) $('examPanel_2').style.display = t === 2 ? '' : 'none';
+  if (typeof renderExamList === 'function') renderExamList(t);
 }
 
 
@@ -222,6 +240,79 @@ function renderSubList(t) {
 function toggleCols(t) { App.expanded[t] = !App.expanded[t]; $('gtbl').classList.toggle(`t${t}-collapsed`, !App.expanded[t]); if ($(`tbtn${t}`)) $(`tbtn${t}`).innerHTML = `<span class="arr">${App.expanded[t] ? '▼' : '▶'}</span> ${App.expanded[t] ? 'ยุบ' : 'ขยาย'}`; }
 function toggleIgnoreR() { App.ignoreR = $('toggleR').checked; $$('#gtBody tr[data-sid]').forEach(tr => recalcTots(tr)); }
 
+// ── จัดการรายการสอบ (examUnits) ──────────────────────
+function addExam(t) {
+  if (!App.examUnits) App.examUnits = { 1: [], 2: [] };
+  App.examUnits[t].push({ name: `สอบครั้งที่ ${App.examUnits[t].length + 1}`, max: 50, indicators: [] });
+  renderExamList(t);
+  updateAutoScoreDisplay();
+}
+function rmExam(t, ei) {
+  if (!confirm(`ลบ "${App.examUnits[t][ei].name}" ?`)) return;
+  App.examUnits[t].splice(ei, 1);
+  renderExamList(t);
+  updateAutoScoreDisplay();
+}
+
+function renderExamList(t) {
+  const wrap = $(`examList_${t}`); if (!wrap) return;
+  if (!App.examUnits) App.examUnits = { 1: [], 2: [] };
+  const exams = App.examUnits[t] || [];
+
+  // ตัวชี้วัด
+  const allIndicators = [
+    ...($('ci_indicators_formative')?.value||'').split(/\r?\n/).map(s=>s.trim()).filter(Boolean).map(s=>({txt:s,type:'formative'})),
+    ...($('ci_indicators_summative')?.value||'').split(/\r?\n/).map(s=>s.trim()).filter(Boolean).map(s=>({txt:s,type:'summative'}))
+  ];
+
+  if (!exams.length) {
+    wrap.innerHTML = `<div class="text-muted text-center py-3 border rounded" style="color:#94a3b8;font-size:.83rem;">ยังไม่มีรายการสอบ — กดเพิ่มด้านล่าง</div>`;
+    updateAutoScoreDisplay(); return;
+  }
+
+  wrap.innerHTML = exams.map((exam, ei) => {
+    const selInds = Array.isArray(exam.indicators) ? exam.indicators : [];
+    const indHtml = allIndicators.length === 0
+      ? `<div style="color:#94a3b8;font-size:.75rem;">ยังไม่มีตัวชี้วัด</div>`
+      : allIndicators.map(ind => {
+          const checked = selInds.includes(ind.txt) ? 'checked' : '';
+          const badge = ind.type === 'formative'
+            ? `<span style="font-size:.65rem;background:#dbeafe;color:#1d4ed8;border-radius:4px;padding:1px 5px;">ระหว่างทาง</span>`
+            : `<span style="font-size:.65rem;background:#dcfce7;color:#15803d;border-radius:4px;padding:1px 5px;">ปลายทาง</span>`;
+          return `<label style="display:flex;align-items:flex-start;gap:6px;cursor:pointer;padding:3px 0;font-size:.8rem;">
+            <input type="checkbox" ${checked} style="margin-top:2px;width:14px;height:14px;cursor:pointer;flex-shrink:0;"
+              onchange="App.examUnits[${t}][${ei}].indicators=App.examUnits[${t}][${ei}].indicators||[];
+                this.checked
+                  ? (App.examUnits[${t}][${ei}].indicators.includes('${ind.txt.replace(/'/g,"\\'")}') || App.examUnits[${t}][${ei}].indicators.push('${ind.txt.replace(/'/g,"\\'")}'))
+                  : (App.examUnits[${t}][${ei}].indicators = App.examUnits[${t}][${ei}].indicators.filter(x=>x!=='${ind.txt.replace(/'/g,"\\'")}'))">
+            <span>${ind.txt} ${badge}</span>
+          </label>`;
+        }).join('');
+
+    return `<div class="sub-row p-3 border rounded bg-white mb-2" style="display:block;">
+      <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
+        <span style="font-weight:800;font-size:.85rem;color:#0369a1;">สอบครั้งที่ ${ei+1}</span>
+        <input class="sub-name" type="text" value="${exam.name||''}" placeholder="ชื่อการสอบ"
+          onchange="App.examUnits[${t}][${ei}].name=this.value">
+        <span class="sub-max-lbl">คะแนนเต็ม</span>
+        <input class="sub-max" type="number" min="1" value="${Number(exam.max)||0}"
+          onchange="App.examUnits[${t}][${ei}].max=Number(this.value)||0;updateAutoScoreDisplay();renderExamList(${t});">
+        <button class="btn-rm" onclick="rmExam(${t},${ei})">✕ ลบ</button>
+      </div>
+      ${allIndicators.length > 0 ? `
+      <div style="margin-top:8px;border-top:1px dashed #bae6fd;padding-top:8px;">
+        <div style="font-weight:700;font-size:.78rem;color:#0369a1;margin-bottom:6px;">
+          🎯 ตัวชี้วัดที่ใช้ในการสอบนี้
+          <span style="font-weight:400;color:#94a3b8;">(${selInds.length}/${allIndicators.length})</span>
+        </div>
+        <div style="max-height:180px;overflow-y:auto;">${indHtml}</div>
+      </div>` : ''}
+    </div>`;
+  }).join('');
+
+  updateAutoScoreDisplay();
+}
+
 async function loadGrades() {
   const year = $('gYear').value, cls = $('gClass').value, subj = $('gSubj').value;
   if (!subj || subj === "-- ไม่พบวิชา --") return Utils.toast('กรุณาเลือกวิชาที่ถูกต้อง', 'error');
@@ -255,8 +346,13 @@ async function loadGrades() {
 
     App.units[1] = res.config?.units?.t1 || res.config?.subItems?.t1 || [];
     App.units[2] = res.config?.units?.t2 || res.config?.subItems?.t2 || [];
+    App.examUnits = {
+      1: res.config?.examUnits?.t1 || [],
+      2: res.config?.examUnits?.t2 || []
+    };
 
     normalizeUnits(1); normalizeUnits(2); renderSubList(1); renderSubList(2);
+    if (typeof renderExamList === 'function') { renderExamList(1); renderExamList(2); }
 
     if ($('tabTerm2Btn')) $('tabTerm2Btn').style.display = 'flex';
     if ($('t2AutoBlock')) $('t2AutoBlock').style.display = 'flex';
@@ -331,14 +427,16 @@ async function loadGrades() {
 // =====================================================
 
 function buildTable() {
-  _buildUnitTabs_();
+  const isYear = (App.activeTerm || 1) === 0;
+  if (!isYear) _buildUnitTabs_();
+  else { const w = $('unitTabsRow'); if(w) w.innerHTML = ''; }
   buildHead();
   buildBody();
   $('gtbl').classList.remove('t1-collapsed', 't2-collapsed');
   App.expanded = { 1: true, 2: true };
   const t = App.activeTerm || 1;
   const saveBtn = document.querySelector('.btn-save');
-  if (saveBtn) saveBtn.textContent = `💾 บันทึกเทอม ${t}`;
+  if (saveBtn && t !== 0) saveBtn.textContent = `💾 บันทึกเทอม ${t}`;
 }
 
 function _buildUnitTabs_() {
@@ -363,58 +461,108 @@ function switchUnitTab(unitIdx) {
 
 function buildHead() {
   ScoreLogic.syncHiddenInputs();
-  const t      = App.activeTerm || 1;
-  const uIdx   = App.activeUnit ?? null;
-  const units  = App.units[t] || [];
-  const target = ScoreLogic.getTarget();
+  const t      = App.activeTerm;  // 0=ทั้งปี, 1=เทอม1, 2=เทอม2
+  const isYear = t === 0;
+  const tgt    = ScoreLogic.getTarget();
+
   let r1 = `<th rowspan="3" class="th-base s-c0" style="width:36px;">ที่</th>
              <th rowspan="3" class="th-base s-c1" style="width:72px;">รหัส</th>
              <th rowspan="3" class="th-base s-c2" style="text-align:left;min-width:145px;">ชื่อ-นามสกุล</th>
              <th rowspan="3" class="th-att" style="width:115px;">มาเรียน</th>`;
   let r2 = '', r3 = '';
 
-  if (uIdx === null) {
-    const flat = ScoreLogic.getFlatItems(t);
-    if (flat.length > 0) r1 += `<th colspan="${flat.length + units.length}" class="th-t${t}s sc${t}">📝 หน่วย / งาน เทอม ${t}</th>`;
-    r1 += `<th rowspan="3" class="th-t${t}sc" style="width:88px;">เก็บ ท.${t}<br><small>(${ScoreLogic.getUnitsMax(t)})</small></th>
-            <th rowspan="3" class="th-t${t}e" style="width:72px;">สอบ<br><small>(${ScoreLogic.getExamMax(t)})</small></th>
-            <th rowspan="3" class="th-t${t}t" style="width:72px;">รวม<br><small>(${target})</small></th>`;
-    units.forEach(u => {
-      const c = (u.items||[]).length;
-      if (c > 0) {
-        r2 += `<th colspan="${c+1}" class="th-t${t}si sc${t}">${u.name}<br><small>${Number(u.max)||0} คะแนน</small></th>`;
-        (u.items||[]).forEach(item => r3 += `<th class="th-t${t}raw sc${t}">${item.name}<br><small>(${Number(item.max)||0})</small></th>`);
-        r3 += `<th class="th-t${t}sc sc${t}">รวม</th>`;
-      }
-    });
-  } else if (uIdx === -1) {
-    r1 += `<th rowspan="3" class="th-t${t}sc" style="width:100px;">เก็บรวม<br><small>(${ScoreLogic.getUnitsMax(t)})</small></th>
-            <th rowspan="3" class="th-t${t}e" style="width:100px;">สอบ<br><small>(${ScoreLogic.getExamMax(t)})</small></th>
-            <th rowspan="3" class="th-t${t}t" style="width:88px;">รวม<br><small>(${target})</small></th>`;
+  if (isYear) {
+    r1 += `<th rowspan="3" class="th-t1sc" style="width:80px;background:#ede9fe;color:#6d28d9;">เก็บ ท.1<br><small>(${ScoreLogic.getUnitsMax(1)})</small></th>
+            <th rowspan="3" class="th-t1e"  style="width:72px;">สอบ ท.1<br><small>(${ScoreLogic.getExamMax(1)})</small></th>
+            <th rowspan="3" class="th-t1t"  style="width:80px;">รวม ท.1<br><small>(${tgt})</small></th>
+            <th rowspan="3" class="th-t2sc" style="width:80px;background:#dbeafe;color:#1d4ed8;">เก็บ ท.2<br><small>(${ScoreLogic.getUnitsMax(2)})</small></th>
+            <th rowspan="3" class="th-t2e"  style="width:72px;">สอบ ท.2<br><small>(${ScoreLogic.getExamMax(2)})</small></th>
+            <th rowspan="3" class="th-t2t"  style="width:80px;">รวม ท.2<br><small>(${tgt})</small></th>`;
   } else {
-    const u = units[uIdx] || {}, items = u.items || [];
-    if (items.length > 0) {
-      r1 += `<th colspan="${items.length+1}" class="th-t${t}s sc${t}">${u.name||`หน่วย ${uIdx+1}`} <small>(${Number(u.max)||0} คะแนน)</small></th>`;
-      items.forEach(item => r2 += `<th class="th-t${t}raw sc${t}">${item.name}<br><small>(${Number(item.max)||0})</small></th>`);
-      r2 += `<th class="th-t${t}sc sc${t}">รวมหน่วย</th>`;
+    const units = App.units[t] || [];
+    const uIdx  = App.activeUnit ?? null;
+    if (uIdx === null) {
+      const flat = ScoreLogic.getFlatItems(t);
+      if (flat.length > 0) r1 += `<th colspan="${flat.length + units.length}" class="th-t${t}s sc${t}">📝 หน่วย / งาน เทอม ${t}</th>`;
+      r1 += `<th rowspan="3" class="th-t${t}sc" style="width:88px;">เก็บ ท.${t}<br><small>(${ScoreLogic.getUnitsMax(t)})</small></th>
+              <th rowspan="3" class="th-t${t}e" style="width:72px;">สอบ<br><small>(${ScoreLogic.getExamMax(t)})</small></th>
+              <th rowspan="3" class="th-t${t}t" style="width:72px;">รวม<br><small>(${tgt})</small></th>`;
+      units.forEach(u => {
+        const c = (u.items||[]).length;
+        if (c > 0) {
+          r2 += `<th colspan="${c+1}" class="th-t${t}si sc${t}">${u.name}<br><small>${Number(u.max)||0} คะแนน</small></th>`;
+          (u.items||[]).forEach(item => r3 += `<th class="th-t${t}raw sc${t}">${item.name}<br><small>(${Number(item.max)||0})</small></th>`);
+          r3 += `<th class="th-t${t}sc sc${t}">รวม</th>`;
+        }
+      });
+    } else if (uIdx === -1) {
+      const examItems = App.examUnits?.[t] || [];
+      if (examItems.length > 0) {
+        r1 += `<th colspan="${examItems.length}" class="th-t${t}s sc${t}">📝 รายการสอบ เทอม ${t}</th>`;
+        examItems.forEach(eu => r2 += `<th class="th-t${t}raw sc${t}">${eu.name}<br><small>(${Number(eu.max)||0})</small></th>`);
+      } else {
+        r1 += `<th rowspan="3" class="th-t${t}e" style="width:120px;">รายการสอบ<br><small style="color:#94a3b8;">ยังไม่มี</small></th>`;
+      }
+      r1 += `<th rowspan="3" class="th-t${t}sc" style="width:100px;">เก็บรวม<br><small>(${ScoreLogic.getUnitsMax(t)})</small></th>
+              <th rowspan="3" class="th-t${t}e" style="width:88px;">สอบรวม<br><small>(${ScoreLogic.getExamMax(t)})</small></th>
+              <th rowspan="3" class="th-t${t}t" style="width:88px;">รวม<br><small>(${tgt})</small></th>`;
+    } else {
+      const u = units[uIdx]||{}, items = u.items||[];
+      if (items.length > 0) {
+        r1 += `<th colspan="${items.length+1}" class="th-t${t}s sc${t}">${u.name||`หน่วย ${uIdx+1}`} <small>(${Number(u.max)||0} คะแนน)</small></th>`;
+        items.forEach(item => r2 += `<th class="th-t${t}raw sc${t}">${item.name}<br><small>(${Number(item.max)||0})</small></th>`);
+        r2 += `<th class="th-t${t}sc sc${t}">รวมหน่วย</th>`;
+      }
+      r1 += `<th rowspan="3" class="th-t${t}sc" style="width:88px;background:#6d28d9;color:#fff;">เก็บรวม<br><small>(${ScoreLogic.getUnitsMax(t)})</small></th>
+              <th rowspan="3" class="th-t${t}e" style="width:72px;">สอบ<br><small>(${ScoreLogic.getExamMax(t)})</small></th>
+              <th rowspan="3" class="th-t${t}t" style="width:72px;">รวม<br><small>(${tgt})</small></th>`;
     }
-    r1 += `<th rowspan="3" class="th-t${t}sc" style="width:88px;background:#6d28d9;">เก็บรวม<br><small>(${ScoreLogic.getUnitsMax(t)})</small></th>
-            <th rowspan="3" class="th-t${t}e" style="width:72px;">สอบ<br><small>(${ScoreLogic.getExamMax(t)})</small></th>
-            <th rowspan="3" class="th-t${t}t" style="width:72px;">รวม<br><small>(${target})</small></th>`;
   }
-  r1 += `<th rowspan="3" class="th-grand" style="width:74px;">รวม<br><small>(${target})</small></th>
+
+  const grandLabel = isYear ? `รวมทั้งปี<br><small>(${tgt*2})</small>` : `รวม<br><small>(${tgt})</small>`;
+  r1 += `<th rowspan="3" class="th-grand" style="width:80px;background:#1e3a5f;color:#fff;">${grandLabel}</th>
           <th rowspan="3" style="width:65px;background:#4f46e5;color:#fff;font-size:15px;vertical-align:middle;">เกรด</th>`;
   $('gtHead').innerHTML = `<tr>${r1}</tr><tr>${r2}</tr><tr>${r3}</tr>`;
 }
+
 
 function buildBody() {
   ScoreLogic.syncHiddenInputs();
   if (!App.students.length) return $('gtBody').innerHTML = `<tr><td colspan="50" class="text-center py-4 text-muted">ไม่พบข้อมูลผู้เรียน</td></tr>`;
 
-  const t     = App.activeTerm || 1;
+  const t      = App.activeTerm;
+  const isYear = t === 0;
+  const tgt    = ScoreLogic.getTarget();
+
+  // ── ทั้งปี: แสดงเฉพาะข้อมูล read-only ──
+  if (isYear) {
+    $('gtBody').innerHTML = App.students.map((s, idx) => {
+      const st   = s.stats || {};
+      const g    = s.grades || {};
+      const k1   = Number(g.t1_acc)||0, e1 = Number(g.t1_exam)||0, r1 = k1+e1;
+      const k2   = Number(g.t2_acc)||0, e2 = Number(g.t2_exam)||0, r2 = k2+e2;
+      const grand = r1+r2;
+      const cls  = (v,mx) => v===0?'nil':v>=mx*0.5?'ok':'fail';
+      return `<tr data-sid="${s.studentId}">
+        <td class="s-c0">${idx+1}</td><td class="s-c1">${s.studentId}</td>
+        <td class="s-c2"><span>${s.name}</span></td>
+        <td><span class="sp p">ม ${st.present||0}</span> <span class="sp a">ข ${st.absent||0}</span> <span class="sp l">ล ${st.leave||0}</span></td>
+        <td><span class="tbadge ${k1===0?'nil':'ok'}">${k1||'-'}</span></td>
+        <td><span class="tbadge ${e1===0?'nil':'ok'}">${e1||'-'}</span></td>
+        <td><span class="tbadge ${r1===0?'nil':r1>=tgt*0.5?'ok':'fail'} t1tot">${r1||'-'}</span></td>
+        <td><span class="tbadge ${k2===0?'nil':'ok'}">${k2||'-'}</span></td>
+        <td><span class="tbadge ${e2===0?'nil':'ok'}">${e2||'-'}</span></td>
+        <td><span class="tbadge ${r2===0?'nil':r2>=tgt*0.5?'ok':'fail'} t2tot">${r2||'-'}</span></td>
+        <td><span class="gbadge ${grand===0?'nil':grand>=tgt?'ok':'fail'} gtot">${grand||'-'}</span></td>
+        <td style="background:#f8fafc;"><span class="gbadge ${grand===0?'nil':grand>=tgt?'ok':'fail'} final-grade" style="font-size:1.05rem;border:2px solid #c7d2fe;min-width:48px;">${grand===0?'-':Utils.calcGradeFrontend(grand)}</span></td>
+      </tr>`;
+    }).join('');
+    return;
+  }
+
+  // ── เทอม 1 หรือ 2 ──
   const uIdx  = App.activeUnit ?? null;
   const units = App.units[t] || [];
-  const tgt   = ScoreLogic.getTarget();
 
   const mkExamInput = (s) => `<input type="number" class="sinput ${t===2?'t2':''} s-t${t}e" data-term="${t}" data-type="exam" min="0" max="${ScoreLogic.getExamMax(t)}" value="${s.grades?.[`t${t}_exam`]??''}" oninput="calcExam(this)">`;
 
@@ -436,8 +584,15 @@ function buildBody() {
         cells += `<td class="td-sc${t} sc${t} unit-total-${t}" data-unit="${unitIndex}">${ScoreLogic.calcScaled(raw,ScoreLogic.getUnitRawMax(t,unitIndex),Number(unit.max)||0)||'-'}</td>`;
       });
     } else if (uIdx === -1) {
-      // สอบ — แสดงแค่ช่องเก็บรวม ไม่มี input งาน
-    } else {
+      // ── สอบ — แสดง input ต่อรายการสอบ ──
+      const examItems = App.examUnits?.[t] || [];
+      examItems.forEach((eu, ei) => {
+        const val = (s.grades?.[`t${t}_exam_sub`]||[])[ei] ?? '';
+        cells += `<td class="td-sub${t} sc${t}"><input type="number" class="sinput exam-sub${t}" min="0" max="${Number(eu.max)||0}" value="${val}" data-term="${t}" data-examidx="${ei}" oninput="calcExamSub(this,${t})"></td>`;
+      });
+      if (!examItems.length) {
+        cells += `<td class="td-sc${t}" style="color:#94a3b8;font-size:.78rem;white-space:nowrap;padding:6px 10px;">ยังไม่มีรายการสอบ<br><small>ตั้งค่าในแท็บ "หน่วยการเรียนรู้"</small></td>`;
+      }
       const unit = units[uIdx]||{}, items = unit.items||[];
       const offset = ScoreLogic.getUnitOffsets(t).find(o=>o.unitIndex===uIdx);
       const base = offset?.start ?? 0; let raw = 0;
@@ -511,6 +666,35 @@ function calcExam(el) {
   const tr = el.closest('tr');
   handleAutoTab(el, tr, mx);
   recalcTots(tr); refreshAllScoreInputStates(tr);
+}
+
+function calcExamSub(el, t) {
+  const mx = +el.getAttribute('max');
+  if (+el.value > mx) { el.value = mx; Utils.toast(`เต็ม ${mx} คะแนน`, 'warning'); }
+  if (+el.value < 0) el.value = 0;
+  updateScoreInputState(el);
+  const tr = el.closest('tr');
+  handleAutoTab(el, tr, mx);
+  // คำนวณ exam รวมจาก sub items ทั้งหมด
+  const examSubVals = [...tr.querySelectorAll(`.exam-sub${t}`)].map(i => Number(i.value)||0);
+  const examTotal = examSubVals.reduce((s,v) => s+v, 0);
+  // แสดงใน .t${t}sc (exam span) ถ้ามี
+  const examSpan = tr.querySelector(`.t${t}e-total`);
+  if (examSpan) examSpan.textContent = examTotal || '-';
+  recalcTotsFromExamSub(tr, t, examTotal);
+  refreshAllScoreInputStates(tr);
+}
+
+function recalcTotsFromExamSub(tr, t, examTotal) {
+  const getVal = sel => Number(tr.querySelector(sel)?.textContent || tr.querySelector(sel)?.value || 0);
+  const keep  = getVal(`.t${t}sc`);
+  const total = keep + examTotal;
+  const tgt   = ScoreLogic.getTarget();
+  const upd   = (sel, val, cls) => { const e = tr.querySelector(sel); if(e){e.textContent=val||'-';e.className=cls;} };
+  upd(`.t${t}tot`, total, `tbadge ${total===0?'nil':'ok'} t${t}tot`);
+  upd('.gtot', total, `gbadge ${total===0?'nil':total<tgt*0.5?'fail':'ok'} gtot`);
+  upd('.final-grade', total===0?'-':Utils.calcGradeFrontend(total),
+      `gbadge ${total===0?'nil':total<tgt*0.5?'fail':'ok'} final-grade`);
 }
 
 function recalcTots(tr) {
@@ -617,7 +801,15 @@ function setSchoolProfileForm(p = {}) {
 }
 
 function buildConfigPayload() {
-  return { t1_acc: ScoreLogic.getUnitsMax(1), t1_exam: ScoreLogic.getExamMax(1), t2_acc: ScoreLogic.getUnitsMax(2), t2_exam: ScoreLogic.getExamMax(2), units: { t1: App.units[1], t2: App.units[2] }, subItems: { t1: [], t2:[] }, rawMax: { t1: 0, t2: 0 }, courseInfo: getCourseInfoForm() };
+  if (!App.examUnits) App.examUnits = { 1: [], 2: [] };
+  return {
+    t1_acc: ScoreLogic.getUnitsMax(1), t1_exam: ScoreLogic.getExamMax(1),
+    t2_acc: ScoreLogic.getUnitsMax(2), t2_exam: ScoreLogic.getExamMax(2),
+    units:     { t1: App.units[1],     t2: App.units[2] },
+    examUnits: { t1: App.examUnits[1], t2: App.examUnits[2] },
+    subItems: { t1: [], t2: [] }, rawMax: { t1: 0, t2: 0 },
+    courseInfo: getCourseInfoForm()
+  };
 }
 
 async function saveGrades() {
@@ -648,7 +840,13 @@ async function saveGrades() {
     const subVals = [...tr.querySelectorAll(`.sub${t}`)].map(i => i.value);
     const acc     = ScoreLogic.calcKeepFromFlat(t, subVals);
     const examEl  = tr.querySelector(`input[data-term="${t}"][data-type="exam"]`);
-    const examVal = examEl ? examEl.value : '';
+
+    // exam sub items (ถ้ามี)
+    const examSubInputs = [...tr.querySelectorAll(`.exam-sub${t}`)];
+    const examSubVals   = examSubInputs.map(i => i.value);
+    const examVal = examSubInputs.length > 0
+      ? String(examSubVals.reduce((s,v) => s+(Number(v)||0), 0))
+      : (examEl ? examEl.value : '');
 
     // ใช้ snapshot สำหรับเทอมอื่น
     const oAcc  = Number(snap[`t${other}_acc`])  || 0;
@@ -656,8 +854,10 @@ async function saveGrades() {
     const oSub  = Array.isArray(snap[`t${other}_sub`]) ? snap[`t${other}_sub`] : [];
 
     records.push(t === 1
-      ? { studentId: sid, t1_sub: subVals, t1_acc: acc, t1_exam: examVal, t2_sub: oSub, t2_acc: oAcc, t2_exam: oExam }
-      : { studentId: sid, t1_sub: oSub, t1_acc: oAcc, t1_exam: oExam, t2_sub: subVals, t2_acc: acc, t2_exam: examVal }
+      ? { studentId: sid, t1_sub: subVals, t1_acc: acc, t1_exam: examVal, t1_exam_sub: examSubVals,
+          t2_sub: oSub, t2_acc: oAcc, t2_exam: oExam, t2_exam_sub: snap.t2_exam_sub || [] }
+      : { studentId: sid, t1_sub: oSub, t1_acc: oAcc, t1_exam: oExam, t1_exam_sub: snap.t1_exam_sub || [],
+          t2_sub: subVals, t2_acc: acc, t2_exam: examVal, t2_exam_sub: examSubVals }
     );
   });
 
