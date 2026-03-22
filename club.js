@@ -540,23 +540,27 @@ function _renderClubActivity() {
 
   // ── ส่วน 2: แถวนักเรียน ──
   const bodyRows = members.map((m, idx) => {
-    // ลำดับความสำคัญ: attMap ที่บันทึกไว้ → realAttMap จาก Attendance จริง → default มาทั้งหมด
+    // ลำดับความสำคัญเหมือนแนะแนว:
+    // 1. attMap ที่บันทึกไว้แล้ว (เคยกด save) → ใช้ค่านั้น
+    // 2. realAttMap จาก Attendance sheet จริง → pre-fill อัตโนมัติ
     let att;
     const saved = Club.attMap[m.studentId];
-    if (saved && saved.length > 0) {
-      // มีข้อมูลที่บันทึกไว้แล้ว ใช้อันนั้น
+    const hasSaved = saved && saved.length > 0 && saved.some(v => v === 'ข' || v === 'ล');
+    // ถือว่า "มีข้อมูลบันทึกจริง" ก็ต่อเมื่อมี ข หรือ ล อย่างน้อย 1 ครั้ง
+    // (ถ้าเป็น ป ทั้งหมด แปลว่ายังไม่ได้บันทึกจริง → ให้ดึงจาก Attendance)
+    if (hasSaved) {
       att = _normalizeAtt_(saved);
       while (att.length < nDates) att.push('ป');
       att = att.slice(0, nDates);
     } else {
-      // ยังไม่เคยบันทึก → ดึงจาก Attendance จริง
+      // ดึงจาก Attendance จริง
       const realAtt = Club.realAttMap[m.studentId] || {};
       att = dates.map(dateStr => {
         const r = String(realAtt[dateStr] || '').trim();
-        if (r === 'ข') return 'ข';
-        if (r === 'ล' || r === 'ป') return 'ล';
-        if (r === 'ม') return 'ป'; // มาเรียน → ✓
-        return 'ป'; // default = มา
+        if (r === 'ข')                return 'ข'; // ขาด
+        if (r === 'ล' || r === 'ป')   return 'ล'; // ลา/ป่วย
+        if (r === 'ม' || r === '')    return 'ป'; // มา / ไม่มีข้อมูล = มา
+        return 'ป';
       });
     }
     Club.attMap[m.studentId] = att;
