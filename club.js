@@ -335,35 +335,52 @@ function switchClubClassTab(cls) {
 }
 
 // ── render หน้าหลัก ──────────────────────────────────
+// แบ่งเป็น 2 sub-tab: "ข้อมูลชุมนุม" และ "จัดการสมาชิก"
 function _renderClubMain() {
   const wrap = $('clubContainer'); if (!wrap) return;
   const t = Club.term;
   const memberCount = Club.members.length;
-  const byClass = {};
-  Club.members.forEach(m => {
-    if (!byClass[m.classroom]) byClass[m.classroom] = [];
-    byClass[m.classroom].push(m);
-  });
+  const activeTab = Club._subTab || 'info'; // 'info' | 'members'
 
-  wrap.innerHTML = `
-    <div class="card mb-3" style="background:#fefce8;border:1px solid #fde68a;">
-      <div style="font-weight:800;font-size:.9rem;color:#92400e;margin-bottom:12px;">
-        🎯 ตั้งค่าชุมนุม ภาคเรียนที่ ${t}
-      </div>
-      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;">
+  // ── sub-tab bar ──
+  const tabBar = `
+    <div style="display:flex;gap:0;margin-bottom:0;border-bottom:2px solid #fde68a;">
+      <button onclick="Club._subTab='info';_renderClubMain()"
+        style="padding:8px 20px;font-size:.85rem;font-weight:700;cursor:pointer;border:none;
+               background:${activeTab==='info'?'#fef3c7':'#fff'};
+               color:${activeTab==='info'?'#92400e':'#9ca3af'};
+               border-bottom:${activeTab==='info'?'3px solid #d97706':'3px solid transparent'};
+               margin-bottom:-2px;">
+        🎯 ข้อมูลชุมนุม
+      </button>
+      <button onclick="Club._subTab='members';_renderClubMain()"
+        style="padding:8px 20px;font-size:.85rem;font-weight:700;cursor:pointer;border:none;
+               background:${activeTab==='members'?'#fef3c7':'#fff'};
+               color:${activeTab==='members'?'#92400e':'#9ca3af'};
+               border-bottom:${activeTab==='members'?'3px solid #d97706':'3px solid transparent'};
+               margin-bottom:-2px;">
+        👥 จัดการสมาชิก
+        ${memberCount > 0 ? `<span style="background:#d97706;color:#fff;border-radius:10px;padding:0 6px;font-size:11px;margin-left:4px;">${memberCount}</span>` : ''}
+      </button>
+    </div>`;
+
+  // ── tab: ข้อมูลชุมนุม ──
+  const tabInfo = `
+    <div style="padding:14px 0;">
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px;">
         <div style="flex:1;min-width:200px;">
           <label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px;">ชื่อชุมนุม</label>
           <input type="text" class="cfg-n" style="width:100%;text-align:left;"
             placeholder="เช่น ชุมนุมคอมพิวเตอร์" value="${Club.clubName}"
             oninput="Club.clubName=this.value">
         </div>
-        <div style="flex:0;min-width:130px;">
+        <div style="flex:0;min-width:160px;">
           <label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px;">ครูที่ปรึกษา</label>
           <input type="text" class="cfg-n" style="width:100%;text-align:left;"
             placeholder="ชื่อครู" value="${Club.teacher}"
             oninput="Club.teacher=this.value">
         </div>
-        <div style="flex:0;min-width:100px;">
+        <div style="flex:0;min-width:110px;">
           <label style="font-size:12px;color:#6b7280;display:block;margin-bottom:4px;">วันเรียน</label>
           <select class="cfg-n" style="width:100%;" onchange="Club.dayOfWeek=this.value;refreshClubDates()">
             ${['จันทร์','อังคาร','พุธ','พฤหัส','ศุกร์'].map((d,i) =>
@@ -373,74 +390,99 @@ function _renderClubMain() {
         </div>
       </div>
 
-      <hr style="border-color:#fde68a;margin:10px 0;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
-        <div style="font-size:12px;font-weight:700;color:#92400e;">เพิ่ม/ลบสมาชิกชุมนุม</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button id="btnLoadSaved" class="btn-pri" style="padding:6px 14px;font-size:.82rem;background:#6b7280;"
-            onclick="loadSavedClub()">
-            📂 โหลดชุมนุมที่บันทึกไว้
-          </button>
-          <button class="btn-pri" style="padding:6px 14px;font-size:.82rem;background:linear-gradient(135deg,#d97706,#b45309);"
-            onclick="loadAllClubStudents()">
-            ${Club.loaded ? '🔄 รีโหลดรายชื่อ' : '👥 จัดการสมาชิก'}
-          </button>
-        </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+        <id id="btnLoadSaved" class="btn-pri" style="padding:6px 14px;font-size:.82rem;background:#6b7280;cursor:pointer;border:none;border-radius:6px;color:#fff;"
+          onclick="loadSavedClub()">
+          📂 โหลดชุมนุมที่บันทึกไว้
+        </id>
+        <span style="font-size:12px;color:#9ca3af;">
+          ${memberCount > 0 ? `สมาชิก <b style="color:#92400e;">${memberCount} คน</b>` : 'ยังไม่มีสมาชิก'}
+        </span>
       </div>
+
+      ${memberCount > 0 ? `
+      <div id="clubActivitySection"></div>
+      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+        <button class="btn-save" style="flex:1;background:linear-gradient(135deg,#d97706,#b45309);"
+          onclick="saveClubData()">
+          💾 บันทึกชุมนุม ภาคเรียน ${t}
+        </button>
+        <button class="btn-pri" style="padding:8px 18px;background:linear-gradient(135deg,#0369a1,#0284c7);"
+          onclick="printClubReport()">
+          🖨️ พิมพ์รายงาน
+        </button>
+      </div>` : `
+      <div style="text-align:center;padding:24px;color:#9ca3af;font-size:13px;">
+        ยังไม่มีสมาชิก — ไปที่แท็บ 👥 จัดการสมาชิก เพื่อเพิ่มนักเรียน
+      </div>`}
+    </div>`;
+
+  // ── tab: จัดการสมาชิก ──
+  const byClass = {};
+  Club.members.forEach(m => {
+    if (!byClass[m.classroom]) byClass[m.classroom] = [];
+    byClass[m.classroom].push(m);
+  });
+
+  const tabMembers = `
+    <div style="padding:14px 0;">
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+        <button class="btn-pri" style="padding:6px 14px;font-size:.82rem;background:linear-gradient(135deg,#d97706,#b45309);"
+          onclick="loadAllClubStudents()">
+          ${Club.loaded ? '🔄 รีโหลดรายชื่อ' : '📋 โหลดรายชื่อทุกชั้น'}
+        </button>
+      </div>
+
       <div id="clubStudentPicker">
         ${!Club.loaded ? `<div style="font-size:13px;color:#9ca3af;padding:6px 0;">กดโหลดรายชื่อเพื่อเลือกนักเรียน</div>` : ''}
       </div>
 
-      <hr style="border-color:#fde68a;margin:12px 0;">
-      <div style="font-size:12px;font-weight:700;color:#92400e;margin-bottom:8px;">
-        สมาชิกชุมนุมปัจจุบัน <span style="font-weight:400;color:#6b7280;">(${memberCount} คน)</span>
+      ${memberCount > 0 ? `
+      <div style="margin-top:14px;padding-top:14px;border-top:1px solid #fde68a;">
+        <div style="font-size:12px;font-weight:700;color:#92400e;margin-bottom:8px;">
+          สมาชิกปัจจุบัน <span style="font-weight:400;color:#6b7280;">(${memberCount} คน)</span>
+        </div>
+        <div>
+          ${Object.entries(byClass).map(([cls, ms]) =>
+            `<div style="margin-bottom:8px;">
+              <span style="font-size:11px;font-weight:700;color:#92400e;background:#fef3c7;
+                           padding:2px 8px;border-radius:20px;margin-right:6px;">${cls}</span>
+              ${ms.map(m =>
+                `<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;
+                  border-radius:20px;background:#fff;border:1px solid #fde68a;font-size:12px;color:#92400e;margin:2px 2px 4px;">
+                  ${m.name}
+                  <button onclick="toggleClubMember('${m.studentId}','${m.name.replace(/'/g,"\'")}','${m.classroom}')"
+                    style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:14px;padding:0;line-height:1;font-weight:bold;">×</button>
+                </span>`
+              ).join('')}
+            </div>`
+          ).join('')}
+        </div>
+      </div>` : ''}
+    </div>`;
+
+  wrap.innerHTML = `
+    <div class="card mb-3" style="background:#fff;border:1px solid #fde68a;padding:0;">
+      <div style="padding:12px 16px 0;">
+        <div style="font-weight:800;font-size:.9rem;color:#92400e;margin-bottom:10px;">
+          🎯 ชุมนุม${Club.clubName ? ' — ' + Club.clubName : ''} ภาคเรียนที่ ${t}
+        </div>
+        ${tabBar}
       </div>
-      <div id="clubMemberChips">
-        ${memberCount === 0
-          ? `<div style="font-size:12px;color:#9ca3af;">ยังไม่มีสมาชิก</div>`
-          : Object.entries(byClass).map(([cls, ms]) =>
-              `<div style="margin-bottom:6px;">
-                <span style="font-size:11px;font-weight:700;color:#92400e;margin-right:6px;">${cls}</span>
-                ${ms.map(m =>
-                  `<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;
-                    border-radius:20px;background:#fef3c7;border:1px solid #fde68a;font-size:12px;color:#92400e;margin:2px;">
-                    ${m.name}
-                    <button onclick="toggleClubMember('${m.studentId}','${m.name.replace(/'/g,"\\'")}','${m.classroom}')"
-                      style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:13px;padding:0;line-height:1;">×</button>
-                  </span>`
-                ).join('')}
-              </div>`
-            ).join('')
-        }
+      <div style="padding:0 16px 14px;">
+        ${activeTab === 'info' ? tabInfo : tabMembers}
       </div>
     </div>
-
-    ${memberCount > 0 ? `
-    <div class="card mb-3" style="background:#fff;border:1px solid #fde68a;">
-      <div style="font-size:.88rem;font-weight:700;color:#92400e;margin-bottom:12px;">📋 บันทึกกิจกรรมชุมนุม ภาคเรียนที่ ${t}</div>
-      <div id="clubActivitySection"></div>
-      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
-        <div style="display:flex;gap:8px;">
-          <button class="btn-save" style="flex:1;background:linear-gradient(135deg,#d97706,#b45309);"
-            onclick="saveClubData()">
-            💾 บันทึกชุมนุม ภาคเรียน ${t}
-          </button>
-          <button class="btn-pri" style="padding:8px 18px;background:linear-gradient(135deg,#0369a1,#0284c7);"
-            onclick="printClubReport()">
-            🖨️ พิมพ์รายงาน
-          </button>
-        </div>
-      </div>
-    </div>` : ''}
   `;
 
-  if (Club.loaded) _renderClubStudentPicker();
-  if (memberCount > 0) {
+  if (activeTab === 'info' && memberCount > 0) {
     if (Club.dates.length === 0) Club.dates = calcClubDates();
     _renderClubActivity();
   }
+  if (activeTab === 'members' && Club.loaded) {
+    _renderClubStudentPicker();
+  }
 }
-
 // ── tab เลือกนักเรียน ────────────────────────────────
 function _renderClubStudentPicker() {
   const wrap = $('clubStudentPicker'); if (!wrap) return;
