@@ -1595,8 +1595,13 @@ body{
     </button>
     <button id="termTab2" onclick="switchGradeTerm(2)"
       style="padding:7px 22px;font-size:.88rem;font-weight:700;border:none;cursor:pointer;
-             background:#fff;color:#6d28d9;border-radius:0 8px 8px 0;border:1.5px solid #6d28d9;border-left:none;">
+             background:#fff;color:#6d28d9;border-radius:0 0 0 0;border:1.5px solid #6d28d9;border-left:none;">
       ภาคเรียนที่ 2
+    </button>
+    <button id="termTabYear" onclick="switchGradeTerm(0)"
+      style="padding:7px 22px;font-size:.88rem;font-weight:700;border:none;cursor:pointer;
+             background:#fff;color:#6d28d9;border-radius:0 8px 8px 0;border:1.5px solid #6d28d9;border-left:none;">
+      ทั้งปี
     </button>
   </div>
   <!-- UNIT TABS -->
@@ -1612,7 +1617,7 @@ body{
   </div>
 
   <!-- Save score -->
-  <div class="card" style="padding:14px 16px;">
+  <div class="card" id="saveBtnArea" style="padding:14px 16px;">
     <button class="btn-save w-100" onclick="saveGrades()" style="font-size:1rem;padding:13px 20px;">
       💾 บันทึกเทอม 1
     </button>
@@ -1827,6 +1832,27 @@ body{
             <div class="sub-list" id="subList_2"></div>
             <button type="button" class="btn-apply mt-2" onclick="addSub(2)" style="width:100%;background:linear-gradient(135deg,#0e7490,#155e75);color:#fff;">
               ➕ เพิ่มหน่วยการเรียนรู้ เทอม 2
+            </button>
+          </div>
+
+          <!-- ── รายการสอบ ── -->
+          <div id="examPanel_1">
+            <div style="font-weight:800;font-size:.88rem;color:#0369a1;margin:14px 0 8px;padding-top:10px;border-top:2px solid #e0f2fe;">
+              📝 รายการสอบ เทอม 1
+            </div>
+            <div id="examList_1"></div>
+            <button type="button" class="btn-apply mt-2" onclick="addExam(1)" style="width:100%;background:linear-gradient(135deg,#0284c7,#0369a1);color:#fff;">
+              ➕ เพิ่มรายการสอบ เทอม 1
+            </button>
+          </div>
+
+          <div id="examPanel_2" style="display:none;">
+            <div style="font-weight:800;font-size:.88rem;color:#0369a1;margin:14px 0 8px;padding-top:10px;border-top:2px solid #e0f2fe;">
+              📝 รายการสอบ เทอม 2
+            </div>
+            <div id="examList_2"></div>
+            <button type="button" class="btn-apply mt-2" onclick="addExam(2)" style="width:100%;background:linear-gradient(135deg,#0e7490,#155e75);color:#fff;">
+              ➕ เพิ่มรายการสอบ เทอม 2
             </button>
           </div>
 
