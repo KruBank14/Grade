@@ -81,27 +81,10 @@ function _subjMatchesTerm(subjectName, term) {
 function switchGradeTerm(term) {
   App.gradeTerm = term;
   const btn1 = $('termTab1'), btn2 = $('termTab2');
-  if (btn1) {
-    btn1.style.background = term === 1 ? '#6d28d9' : '#fff';
-    btn1.style.color      = term === 1 ? '#fff'    : '#6d28d9';
-  }
-  if (btn2) {
-    btn2.style.background = term === 2 ? '#6d28d9' : '#fff';
-    btn2.style.color      = term === 2 ? '#fff'    : '#6d28d9';
-  }
+  if (btn1) { btn1.style.background = term===1?'#6d28d9':'#fff'; btn1.style.color = term===1?'#fff':'#6d28d9'; }
+  if (btn2) { btn2.style.background = term===2?'#6d28d9':'#fff'; btn2.style.color = term===2?'#fff':'#6d28d9'; }
   // อัปเดต dropdown เฉพาะเมื่อไม่ได้ล็อกอยู่
   if (!App.loadedSubject) updateSubjDrop();
-
-  // rebuild ตารางเฉพาะกรณีวิชามีเลขท้าย (subjOnlyTerm 1 หรือ 2)
-  // วิชาทั่วไป (subjOnlyTerm = 0) แสดงทั้ง 2 เทอมอยู่แล้ว ไม่ต้อง rebuild
-  if (App.students && App.students.length && App.subjOnlyTerm !== 0) {
-    const subj = App.loadedSubject || $('gSubj')?.value || '';
-    const hasNum = /\s\d+$/.test(subj);
-    if (hasNum) {
-      App.subjOnlyTerm = term;
-      if (typeof buildTable === 'function') buildTable();
-    }
-  }
 }
 
 function updateSubjDrop() {
