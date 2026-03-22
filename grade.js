@@ -827,7 +827,8 @@ function buildBody() {
         cells += `<td class="td-sub${t} sc${t}"><input type="number" class="sinput sub${t} ${t===2?'t2':''}" min="0" max="${Number(item.max)||0}" value="${val}" data-term="${t}" data-unit="${uIdx}" data-item="${i}" oninput="calcSub(this,${t})"></td>`;
       });
       const unitTotal = ScoreLogic.calcScaled(raw, ScoreLogic.getUnitRawMax(t,uIdx), Number(unit.max)||0);
-      if (items.length>0) cells += `<td class="td-sc${t} sc${t} unit-total-${t}" data-unit="${uIdx}">${unitTotal||'-'}</td>`;
+      const _hasAnyUnit = (s.grades?.[`t${t}_sub`]||[]).some(v => v !== '' && v !== undefined);
+      if (items.length>0) cells += `<td class="td-sc${t} sc${t} unit-total-${t}" data-unit="${uIdx}">${_hasAnyUnit ? unitTotal : '-'}</td>`;
       return { cells, keep: 0, exam: 0, total: unitTotal };
 
     } else {
@@ -838,7 +839,9 @@ function buildBody() {
           const val = flatVals[start+i]??''; raw += Number(val)||0;
           cells += `<td class="td-sub${t} sc${t}"><input type="number" class="sinput sub${t} ${t===2?'t2':''}" min="0" max="${Number((unit.items||[])[i]?.max)||0}" value="${val}" data-term="${t}" data-unit="${unitIndex}" data-item="${i}" oninput="calcSub(this,${t})"></td>`;
         }
-        cells += `<td class="td-sc${t} sc${t} unit-total-${t}" data-unit="${unitIndex}">${ScoreLogic.calcScaled(raw,ScoreLogic.getUnitRawMax(t,unitIndex),Number(unit.max)||0)||'-'}</td>`;
+        const _us = ScoreLogic.calcScaled(raw,ScoreLogic.getUnitRawMax(t,unitIndex),Number(unit.max)||0);
+        const _hasAny = flatVals.slice(start, start+count).some(v => v !== '' && v !== undefined);
+        cells += `<td class="td-sc${t} sc${t} unit-total-${t}" data-unit="${unitIndex}">${_hasAny ? _us : '-'}</td>`;
       });
       cells += `<td class="td-sc${t}"><span class="t${t}sc">${keep||'-'}</span></td>
                 <td>${mkExamInput(s)}</td>
@@ -887,15 +890,10 @@ function calcSub(el, t) {
   const tr = el.closest('tr');
   handleAutoTab(el, tr, mx);
 
-  const flatVals =[...tr.querySelectorAll(`.sub${t}`)].map(i => i.value);
-  ScoreLogic.getUnitOffsets(t).forEach(({ unitIndex, start, count }) => {
-    let raw = 0;
-    for (let i = 0; i < count; i++) raw += Number(flatVals[start + i]) || 0;
-    const unitCell = tr.querySelector(`.unit-total-${t}[data-unit="${unitIndex}"]`);
-    if (unitCell) unitCell.textContent = ScoreLogic.calcScaled(raw, ScoreLogic.getUnitRawMax(t, unitIndex), Number(App.units[t][unitIndex].max)||0) || '-';
-  });
+  _recalcUnitTotals(tr, t);
 
   const scEl = tr.querySelector(`.t${t}sc`);
+  const flatVals = [...tr.querySelectorAll(`.sub${t}`)].map(i => i.value);
   if (scEl) scEl.textContent = ScoreLogic.calcKeepFromFlat(t, flatVals) || '-';
   recalcTots(tr); refreshAllScoreInputStates(tr);
 }
@@ -949,6 +947,24 @@ function recalcTotsFromExamSub(tr, t, examTotal) {
   upd('.gtot', total, `gbadge ${total===0?'nil':total<tgt*0.5?'fail':'ok'} gtot`);
   upd('.final-grade', total===0?'-':Utils.calcGradeFrontend(total),
       `gbadge ${total===0?'nil':total<tgt*0.5?'fail':'ok'} final-grade`);
+}
+
+// ── คำนวณ "รวมหน่วย" ทันทีโดยไม่ต้องรอ oninput ──
+function _recalcUnitTotals(tr, t) {
+  const flatVals = [...tr.querySelectorAll(`.sub${t}`)].map(i => i.value);
+  ScoreLogic.getUnitOffsets(t).forEach(({ unitIndex, start, count }) => {
+    let raw = 0, hasAny = false;
+    for (let i = 0; i < count; i++) {
+      const v = flatVals[start + i];
+      if (v !== '' && v !== undefined) hasAny = true;
+      raw += Number(v) || 0;
+    }
+    const unitCell = tr.querySelector(`.unit-total-${t}[data-unit="${unitIndex}"]`);
+    if (unitCell) {
+      const scaled = ScoreLogic.calcScaled(raw, ScoreLogic.getUnitRawMax(t, unitIndex), Number(App.units[t][unitIndex].max) || 0);
+      unitCell.textContent = hasAny ? scaled : '-';
+    }
+  });
 }
 
 function recalcTots(tr) {
