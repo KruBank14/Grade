@@ -155,20 +155,8 @@ async function loadGrades() {
   App.loadedYear    = year;
   _lockSubjectSelector_();
 
-  App.isSemMode = false; // ทุกชั้นใช้โหมดรายปี (2 เทอมในไฟล์เดียว)
-
-  // ตรวจสอบว่าวิชานี้สอนเฉพาะเทอมใดเทอมหนึ่ง
-  // วิชาที่ลงท้ายด้วยเลขคี่ (1,3,5) = เทอม 1 เท่านั้น
-  // วิชาที่ลงท้ายด้วยเลขคู่ (2,4,6) = เทอม 2 เท่านั้น
-  const subjTermMatch = subj.match(/\s(\d+)$/);
-  const subjTermNum = subjTermMatch ? parseInt(subjTermMatch[1]) : 0;
-  // วิชามีเลขท้าย → ใช้เลขนั้นตัดสิน (คี่=เทอม1, คู่=เทอม2)
-  // วิชาไม่มีเลข → แสดงทั้ง 2 เทอมเสมอ (subjOnlyTerm = 0)
-  if (subjTermNum > 0) {
-    App.subjOnlyTerm = subjTermNum % 2 === 1 ? 1 : 2;
-  } else {
-    App.subjOnlyTerm = 0; // แสดง + บันทึก ทั้ง 2 เทอม
-  }
+  App.isSemMode    = false;
+  App.subjOnlyTerm = 0; // ทุกวิชาแสดง + บันทึกทั้ง 2 เทอมเสมอ
 
   $('lblClass').textContent = cls; $('lblSubj').textContent = subj;
   Utils.showLoading('กำลังโหลดข้อมูล...');
@@ -176,15 +164,11 @@ async function loadGrades() {
 
   try {
     const res = await api('getGrades', { year, classroom: cls, subject: subj });
-    App.config = res.config || {};
-App.courseInfo = res.config?.courseInfo || {};
-    App.termDates = res.termDates || {};
-App.holidays = res.holidays || [];
-App.config = res.config || {};
-App.courseInfo = res.config?.courseInfo || {};
-    App.termDates = res.termDates || {}; 
-    App.holidays = res.holidays ||[];
-        App.homeroomTeacher = res.homeroomTeacher || "-"; 
+    App.config      = res.config  || {};
+    App.courseInfo  = res.config?.courseInfo || {};
+    App.termDates   = res.termDates || {};
+    App.holidays    = res.holidays  || [];
+    App.homeroomTeacher = res.homeroomTeacher || '-';
 
     ScoreLogic.syncHiddenInputs();
 
@@ -195,26 +179,10 @@ App.courseInfo = res.config?.courseInfo || {};
     App.units[2] = res.config?.units?.t2 || res.config?.subItems?.t2 || [];
 
     normalizeUnits(1); normalizeUnits(2); renderSubList(1); renderSubList(2);
-    // ซ่อน/แสดง tab เทอมตามวิชา
-    if (App.subjOnlyTerm === 1) {
-      // วิชาเทอม 1 เท่านั้น — ซ่อน tab เทอม 2
-      if ($('tabTerm2Btn')) $('tabTerm2Btn').style.display = 'none';
-      if ($('t2AutoBlock')) $('t2AutoBlock').style.display = 'none';
-      const t1Btn = document.querySelector('.ttab[onclick*="switchTerm(1"]');
-      if (t1Btn) switchTerm(1, t1Btn);
-    } else if (App.subjOnlyTerm === 2) {
-      // วิชาเทอม 2 เท่านั้น — ซ่อน tab เทอม 1
-      if ($('tabTerm2Btn')) $('tabTerm2Btn').style.display = 'flex';
-      if ($('t2AutoBlock')) $('t2AutoBlock').style.display = 'none';
-      const t2Btn = document.querySelector('.ttab[onclick*="switchTerm(2"]');
-      if (t2Btn) switchTerm(2, t2Btn);
-      // ล็อคคะแนนเทอม 1 ให้เป็น 0
-      if ($('c_t1a')) { $('c_t1a').value = 0; $('c_t1e').value = 0; }
-    } else {
-      // วิชาปกติ — แสดงทั้ง 2 เทอม
-      if ($('tabTerm2Btn')) $('tabTerm2Btn').style.display = 'flex';
-      if ($('t2AutoBlock')) $('t2AutoBlock').style.display = 'flex';
-    }
+
+    // ทุกวิชาแสดงทั้ง 2 เทอม
+    if ($('tabTerm2Btn')) $('tabTerm2Btn').style.display = 'flex';
+    if ($('t2AutoBlock')) $('t2AutoBlock').style.display = 'flex';
     refreshUnitPanelLabels(); updateAutoScoreDisplay(); refreshCourseOverview();
     switchCourseSubTab('basic', $('courseTabBasicBtn'));
 
@@ -309,17 +277,11 @@ function buildHead() {
     });
   };
 
-  const onlyT = App.subjOnlyTerm || 0;
-  if (onlyT !== 2) addTermHeaders(1);
-  if (onlyT !== 1) addTermHeaders(2);
-  if (onlyT === 0) {
-    // แสดงคอลัมน์รวมทั้งปีเฉพาะวิชาที่มี 2 เทอม
-    r1 += `<th rowspan="3" class="th-sum-keep" style="width:80px;">รวมเก็บ<br><small>(ท.1+ท.2)</small><br><small style="opacity:.8;">(${ScoreLogic.getUnitsMax(1)+ScoreLogic.getUnitsMax(2)})</small></th>
-           <th rowspan="3" class="th-sum-exam" style="width:80px;">รวมสอบ<br><small>(ท.1+ท.2)</small><br><small style="opacity:.8;">(${ScoreLogic.getExamMax(1)+ScoreLogic.getExamMax(2)})</small></th>
-           <th rowspan="3" class="th-grand" style="width:74px;">รวม<br>ทั้งปี</th>`;
-  } else {
-    r1 += `<th rowspan="3" class="th-grand" style="width:74px;">รวม</th>`;
-  }
+  addTermHeaders(1);
+  addTermHeaders(2);
+  r1 += `<th rowspan="3" class="th-sum-keep" style="width:80px;">รวมเก็บ<br><small>(ท.1+ท.2)</small><br><small style="opacity:.8;">(${ScoreLogic.getUnitsMax(1)+ScoreLogic.getUnitsMax(2)})</small></th>
+         <th rowspan="3" class="th-sum-exam" style="width:80px;">รวมสอบ<br><small>(ท.1+ท.2)</small><br><small style="opacity:.8;">(${ScoreLogic.getExamMax(1)+ScoreLogic.getExamMax(2)})</small></th>
+         <th rowspan="3" class="th-grand" style="width:74px;">รวม<br>ทั้งปี</th>`;
   r1 += `<th rowspan="3" style="width:65px;background:#4f46e5;color:#fff;font-size:15px;border-right:1px solid rgba(255,255,255,.12);vertical-align:middle;">เกรด</th>`;
   $('gtHead').innerHTML = `<tr>${r1}</tr><tr>${r2}</tr><tr>${r3}</tr>`;
 }
@@ -349,36 +311,21 @@ function buildBody() {
   };
 
   $('gtBody').innerHTML = App.students.map((s, idx) => {
-    const st = s.stats || {}, t1 = buildTermCells(1, s);
+    const st = s.stats || {};
+    const t1 = buildTermCells(1, s);
+    const t2 = buildTermCells(2, s);
+    const finalScore = t1.total + t2.total;
+
     let html = `<tr data-sid="${s.studentId}">
       <td class="s-c0">${idx + 1}</td><td class="s-c1">${s.studentId}</td>
       <td class="s-c2"><div class="d-flex justify-content-between align-items-center gap-1"><span>${s.name}</span><div class="d-flex gap-1"><button class="btn-sm" style="padding:2px 7px;font-size:0.72rem;background:#ede9fe;color:#6d28d9;border:1px solid #c4b5fd;" onclick="printRowPDF('${s.studentId}','term1')">T1</button><button class="btn-sm" style="padding:2px 8px;font-size:0.75rem;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;" onclick="printRowPDF('${s.studentId}','year')">🖨️</button></div></div></td>
-      <td><span class="sp p">ม ${st.present || 0}</span> <span class="sp a">ข ${st.absent || 0}</span> <span class="sp l">ล ${st.leave || 0}</span></td>${t1.cells}`;
-
-    let finalScore = t1.total, isR = false;
-    const onlyT = App.subjOnlyTerm || 0;
-
-    if (onlyT === 1) {
-      // วิชาเทอม 1 เท่านั้น
-      finalScore = t1.total;
-      html += `<td><span class="gbadge ${finalScore === 0 ? 'nil' : finalScore < 50 ? 'fail' : 'ok'} gtot">${finalScore || '-'}</span></td>`;
-    } else if (onlyT === 2) {
-      // วิชาเทอม 2 เท่านั้น
-      const t2 = buildTermCells(2, s);
-      finalScore = t2.total;
-      html += `${t2.cells}
-        <td><span class="gbadge ${finalScore === 0 ? 'nil' : finalScore < 50 ? 'fail' : 'ok'} gtot">${finalScore || '-'}</span></td>`;
-    } else {
-      // วิชาปกติ — 2 เทอม
-      const t2 = buildTermCells(2, s);
-      finalScore = t1.total + t2.total;
-      html += `${t2.cells}
-        <td class="td-sum-keep"><span class="sbadge-keep sum-keep">${Math.round((t1.keep + t2.keep) * 100) / 100 || '-'}</span></td>
-        <td class="td-sum-exam"><span class="sbadge-exam sum-exam">${t1.exam + t2.exam || '-'}</span></td>
-        <td><span class="gbadge ${finalScore === 0 ? 'nil' : finalScore < 50 ? 'fail' : 'ok'} gtot">${finalScore || '-'}</span></td>`;
-    }
-
-    html += `<td style="background:#f8fafc;"><span class="gbadge ${isR ? 'fail' : (finalScore === 0 ? 'nil' : (finalScore < 50 ? 'fail' : 'ok'))} final-grade" style="font-size:1.05rem;border:2px solid #c7d2fe;min-width:48px;">${isR ? 'ร' : (finalScore === 0 ? '-' : Utils.calcGradeFrontend(finalScore))}</span></td></tr>`;
+      <td><span class="sp p">ม ${st.present || 0}</span> <span class="sp a">ข ${st.absent || 0}</span> <span class="sp l">ล ${st.leave || 0}</span></td>
+      ${t1.cells}${t2.cells}
+      <td class="td-sum-keep"><span class="sbadge-keep sum-keep">${Math.round((t1.keep + t2.keep)*100)/100 || '-'}</span></td>
+      <td class="td-sum-exam"><span class="sbadge-exam sum-exam">${t1.exam + t2.exam || '-'}</span></td>
+      <td><span class="gbadge ${finalScore === 0 ? 'nil' : finalScore < 50 ? 'fail' : 'ok'} gtot">${finalScore || '-'}</span></td>
+      <td style="background:#f8fafc;"><span class="gbadge ${finalScore === 0 ? 'nil' : finalScore < 50 ? 'fail' : 'ok'} final-grade" style="font-size:1.05rem;border:2px solid #c7d2fe;min-width:48px;">${finalScore === 0 ? '-' : Utils.calcGradeFrontend(finalScore)}</span></td>
+    </tr>`;
     return html;
   }).join('');
   refreshAllScoreInputStates($('gtBody'));
@@ -431,18 +378,15 @@ function recalcTots(tr) {
   const getVal = (sel) => Number(tr.querySelector(sel)?.textContent || tr.querySelector(sel)?.value || 0);
   const t1s = getVal('.t1sc'), t2s = getVal('.t2sc'), t1e = getVal('.s-t1e'), t2e = getVal('.s-t2e');
   const t1t = t1s + t1e, t2t = t2s + t2e, grand = t1t + t2t;
-  const updateUI = (sel, val, cls) => { const e = tr.querySelector(sel); if(e) { e.textContent = val||'-'; e.className = cls; } };
+  const upd = (sel, val, cls) => { const e = tr.querySelector(sel); if(e) { e.textContent = val||'-'; e.className = cls; } };
 
-  updateUI('.t1tot', t1t, `tbadge ${t1t === 0 ? 'nil' : 'ok'} t1tot`);
-  updateUI('.t2tot', t2t, `tbadge ${t2t === 0 ? 'nil' : 'ok'} t2tot`);
-  updateUI('.gtot', grand, `gbadge ${grand === 0 ? 'nil' : grand < 50 ? 'fail' : 'ok'} gtot`);
-  updateUI('.sum-keep', Math.round((t1s + t2s) * 100) / 100, `sbadge-keep sum-keep`);
-  updateUI('.sum-exam', t1e + t2e, `sbadge-exam sum-exam`);
-
-  const onlyT2 = App.subjOnlyTerm || 0;
-  const finalScore = onlyT2 === 1 ? t1t : onlyT2 === 2 ? t2t : grand;
-  const isR = false;
-  updateUI('.final-grade', isR ? 'ร' : (finalScore === 0 ? '-' : Utils.calcGradeFrontend(finalScore)), `gbadge ${isR ? 'fail' : (finalScore === 0 ? 'nil' : (finalScore < 50 ? 'fail' : 'ok'))} final-grade`);
+  upd('.t1tot',    t1t,   `tbadge ${t1t===0?'nil':'ok'} t1tot`);
+  upd('.t2tot',    t2t,   `tbadge ${t2t===0?'nil':'ok'} t2tot`);
+  upd('.gtot',     grand, `gbadge ${grand===0?'nil':grand<50?'fail':'ok'} gtot`);
+  upd('.sum-keep', Math.round((t1s+t2s)*100)/100, `sbadge-keep sum-keep`);
+  upd('.sum-exam', t1e+t2e, `sbadge-exam sum-exam`);
+  upd('.final-grade', grand===0?'-':Utils.calcGradeFrontend(grand),
+      `gbadge ${grand===0?'nil':grand<50?'fail':'ok'} final-grade`);
 }
 
 function applySubConfig() {
