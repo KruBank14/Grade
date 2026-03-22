@@ -1524,7 +1524,7 @@ body{
 
     <!-- Selector -->
     <div class="card">
-      <div class="sel-bar">
+      <div class="sel-bar" id="subjSelBar">
         <div class="sg">
           <label>ปีการศึกษา</label>
           <input type="number" id="gYear" style="width:88px;" value="2568">
@@ -1535,10 +1535,22 @@ body{
         </div>
         <div class="sg">
           <label>รายวิชา</label>
-          <select id="gSubj" style="min-width:210px;"></select>
+          <select id="gSubj" style="min-width:210px;" onchange="onSubjChange()">
+            <option value="">— เลือกรายวิชา —</option>
+          </select>
         </div>
-        <button class="btn-pri" onclick="loadGrades()">🔄 โหลดรายชื่อ</button>
-        <span class="brand-text">เมื่อเปลี่ยนวิชาต้องกดโหลดรายชื่อทุกครั้งก่อนแก้ไขข้อมูลตารางคะแนน รายวิชา เพื่อป้องกันการบันทึกผิดวิชาครับ</span>
+      </div>
+      <!-- lock bar: แสดงแทน sel-bar เมื่อล็อกแล้ว -->
+      <div id="selectorLockBar" style="display:none;padding:8px 12px;border-radius:10px;background:#eff6ff;border:1.5px solid #bfdbfe;display:none;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+        <div style="font-size:.84rem;font-weight:700;color:#1d4ed8;">
+          🔒 <span id="lockBarSubj" style="color:#1e293b;"></span>
+          <span style="color:#94a3b8;font-weight:400;"> — ชั้น </span><span id="lockBarClass" style="color:#1e293b;"></span>
+          <span style="color:#94a3b8;font-weight:400;"> ปี </span><span id="lockBarYear" style="color:#1e293b;"></span>
+        </div>
+        <button onclick="unlockSubjectSelector()"
+          style="padding:5px 14px;border:1.5px solid #d97706;border-radius:8px;background:#fef3c7;color:#92400e;font-size:.78rem;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">
+          🔓 เปลี่ยนวิชา
+        </button>
       </div>
     </div>
 
@@ -1591,9 +1603,16 @@ body{
 
   <!-- Save score -->
   <div class="card" style="padding:14px 16px;">
-    <button class="btn-save w-100" onclick="saveGrades()" style="font-size:1rem;padding:13px 20px;">
-      💾 บันทึกคะแนน
-    </button>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <button class="btn-save" id="btnSaveTerm1" onclick="saveGrades(1)"
+        style="flex:1;font-size:.95rem;padding:12px 16px;background:linear-gradient(135deg,var(--t1),var(--t1b));">
+        💾 บันทึกเทอม 1
+      </button>
+      <button class="btn-save" id="btnSaveTerm2" onclick="saveGrades(2)"
+        style="flex:1;font-size:.95rem;padding:12px 16px;background:linear-gradient(135deg,var(--t2),var(--t2b));">
+        💾 บันทึกเทอม 2
+      </button>
+    </div>
   </div>
 </div>
 
