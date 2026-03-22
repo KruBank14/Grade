@@ -10,7 +10,8 @@ const Club = {
   dates: [],            // วันที่กรองจากช่วงเทอม + วันที่เลือก
   members: [],          // { studentId, name, classroom }
   topics: [],           // ['หัวข้อครั้งที่ 1', ...]
-  attMap: {},           // { studentId: ['ป','ข','ล',...] }
+  attMap: {},           // { studentId: ['ป','ข','ล',...] }  ← ข้อมูลที่บันทึกไว้
+  realAttMap: {},       // { studentId: { 'dd/mm/yyyy': 'ม'|'ข'|'ล' } } ← จาก Attendance จริง
   resultMap: {},        // { studentId: 'ผ่าน'|'ไม่ผ่าน' }
   allClassStudents: {},
   loadErrors: {},
@@ -91,6 +92,42 @@ function refreshClubDates() {
   _renderClubActivity();
 }
 
+// ── โหลดข้อมูลการเช็คชื่อจริงจาก Attendance sheet (คละชั้น) ──
+// เหมือน loadGuidanceAttendance แต่ต้องยิงทีละชั้น เพราะสมาชิกคละชั้น
+async function loadClubRealAttendance() {
+  if (!Club.members.length) return;
+  const year = $('gYear').value;
+
+  // จัดกลุ่ม members ตามชั้น
+  const byClass = {};
+  Club.members.forEach(m => {
+    if (!byClass[m.classroom]) byClass[m.classroom] = [];
+    byClass[m.classroom].push(m.studentId);
+  });
+
+  Club.realAttMap = {};
+  try {
+    await Promise.all(
+      Object.entries(byClass).map(async ([cls, sids]) => {
+        // หา classroom key จริง (มัธยมอาจเป็น "ม.1 เทอม 1")
+        const subsKey = Object.keys(App.subs || {}).find(k =>
+          k === cls || k.startsWith(cls + ' ')
+        );
+        const classroomKey = subsKey || cls;
+        try {
+          const res = await api('getAttendanceDetail', { year, classroom: classroomKey });
+          // res = { studentId: { 'dd/mm/yyyy': 'ม'|'ข'|'ล' } }
+          sids.forEach(sid => {
+            if (res[sid]) Club.realAttMap[sid] = res[sid];
+          });
+        } catch(e) {
+          console.warn('loadClubRealAttendance error [' + cls + ']:', e.message);
+        }
+      })
+    );
+  } catch(e) { console.warn('loadClubRealAttendance:', e.message); }
+}
+
 function renderClubPanel() {
   const wrap = $('clubContainer'); if (!wrap) return;
   _renderClubMain();
@@ -107,6 +144,7 @@ function switchClubTab(term, btn) {
   Club.members    = [];
   Club.topics     = [];
   Club.attMap     = {};
+  Club.realAttMap = {};
   Club.resultMap  = {};
   Club.dates      = [];
   Club.clubName   = '';
@@ -245,6 +283,9 @@ async function loadSavedClub() {
         }
       });
     } catch(e) { /* ยังไม่มีกิจกรรม — ไม่ error */ }
+
+    // โหลดข้อมูลการเช็คชื่อจริง
+    await loadClubRealAttendance();
 
     Club.dates = calcClubDates();
     // ถ้า topics น้อยกว่าวัน → pad ให้ครบ
@@ -499,13 +540,29 @@ function _renderClubActivity() {
 
   // ── ส่วน 2: แถวนักเรียน ──
   const bodyRows = members.map((m, idx) => {
-    const att = Club.attMap[m.studentId] || Array(nDates).fill('ป');
-    while (att.length < nDates) att.push('ป');
-    Club.attMap[m.studentId] = att.slice(0, nDates);
+    // ลำดับความสำคัญ: attMap ที่บันทึกไว้ → realAttMap จาก Attendance จริง → default มาทั้งหมด
+    let att;
+    const saved = Club.attMap[m.studentId];
+    if (saved && saved.length > 0) {
+      // มีข้อมูลที่บันทึกไว้แล้ว ใช้อันนั้น
+      att = _normalizeAtt_(saved);
+      while (att.length < nDates) att.push('ป');
+      att = att.slice(0, nDates);
+    } else {
+      // ยังไม่เคยบันทึก → ดึงจาก Attendance จริง
+      const realAtt = Club.realAttMap[m.studentId] || {};
+      att = dates.map(dateStr => {
+        const r = String(realAtt[dateStr] || '').trim();
+        if (r === 'ข') return 'ข';
+        if (r === 'ล' || r === 'ป') return 'ล';
+        if (r === 'ม') return 'ป'; // มาเรียน → ✓
+        return 'ป'; // default = มา
+      });
+    }
+    Club.attMap[m.studentId] = att;
 
     const nP    = att.filter(v => v === 'ป').length;
     const nBase = att.filter(v => v !== '-').length;
-    // คำนวณผลจาก attMap จริงๆ เสมอ (ไม่ใช้ค่าเก่าที่อาจผิด)
     const result = nBase > 0
       ? (nP >= Math.ceil(nBase * 0.8) ? 'ผ่าน' : 'ไม่ผ่าน')
       : (Club.resultMap[m.studentId] || 'ไม่ผ่าน');
