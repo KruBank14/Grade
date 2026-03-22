@@ -81,6 +81,7 @@ function _subjMatchesTerm(subjectName, term) {
 function switchGradeTerm(term) {
   App.gradeTerm  = term;
   App.activeTerm = term;
+  App.activeUnit = null; // reset tab หน่วยเมื่อสลับเทอม
 
   // สี Tab
   const btn1 = $('termTab1'), btn2 = $('termTab2');
