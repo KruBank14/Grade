@@ -128,6 +128,10 @@ async function loadClubRealAttendance() {
 
 function renderClubPanel() {
   const wrap = $('clubContainer'); if (!wrap) return;
+  // ใส่ชื่อครูที่ปรึกษาอัตโนมัติจากชื่อที่ล็อกอิน (ถ้ายังไม่มี)
+  if (!Club.teacher && App.user && App.user.name) {
+    Club.teacher = App.user.name;
+  }
   _renderClubMain();
 }
 
@@ -147,7 +151,7 @@ function switchClubTab(term, btn) {
   Club.dates         = [];
   Club.savedMembers  = [];
   Club.clubName   = '';
-  Club.teacher    = '';
+  Club.teacher    = (App.user && App.user.name) ? App.user.name : '';
   Club.dayOfWeek  = '5';
   _renderClubMain();
 }
@@ -259,6 +263,8 @@ async function loadSavedClub() {
     // จัดกลุ่มตามชื่อชุมนุม (อาจมีหลายชุมนุมในโรงเรียน)
     const clubGroups = {}; // { clubName: [ {studentId, name, classroom, result} ] }
 
+    // clubTeachers = { clubName: teacher } ดึงจาก attRes ต่อไป
+    // ตอนนี้เก็บแค่รายชื่อก่อน แล้วดึง teacher จาก getClubAttendanceDetail ทีหลัง
     savedResults.forEach(({ cls, classroomKey, students }) => {
       students.forEach(s => {
         if (s.clubName) {
@@ -267,7 +273,7 @@ async function loadSavedClub() {
             studentId:    s.studentId,
             name:         s.name,
             classroom:    cls,
-            classroomKey: classroomKey || cls, // key จริงสำหรับ GAS
+            classroomKey: classroomKey || cls,
             result:       s.result || ''
           });
         }
@@ -286,14 +292,51 @@ async function loadSavedClub() {
     // เลือกชุมนุมที่จะโหลด
     // ถ้ามีชุมนุมเดิมอยู่แล้ว (Club.clubName) ให้โหลดอันนั้น
     // ถ้าไม่มี ให้เลือกชุมนุมที่มีสมาชิกมากที่สุด
-    let targetClub = Club.clubName && clubGroups[Club.clubName]
-      ? Club.clubName
-      : clubNames.sort((a, b) => clubGroups[b].length - clubGroups[a].length)[0];
+    // กรองชุมนุมของครูที่ล็อกอินอยู่
+    // ขั้นตอน: ดึง teacher จากแต่ละชุมนุม แล้วเลือกอันที่ตรงกับ App.user.name
+    const myName = (App.user && App.user.name) ? App.user.name.trim() : '';
+
+    // ถ้าครูบันทึกชุมนุมไว้แล้ว จะมี teacher field ใน attRes
+    // ดึง teacher ของทุกชุมนุมก่อน
+    const clubTeacherMap = {}; // { clubName: teacher }
+    await Promise.all(
+      clubNames.map(async cName => {
+        const firstMember = clubGroups[cName][0];
+        if (!firstMember) return;
+        try {
+          const attRes = await api('getClubAttendanceDetail', {
+            year,
+            members: [{ studentId: firstMember.studentId, classroom: firstMember.classroomKey || firstMember.classroom }],
+            term: t
+          });
+          if (attRes.teacher) clubTeacherMap[cName] = attRes.teacher;
+          else clubTeacherMap[cName] = '';
+        } catch(e) { clubTeacherMap[cName] = ''; }
+      })
+    );
+
+    // เลือกชุมนุมที่ตรงกับครูที่ล็อกอิน
+    let targetClub = '';
+    if (Club.clubName && clubGroups[Club.clubName]) {
+      // ถ้ามี clubName อยู่แล้ว (เช่น reload) ให้ใช้อันนั้น
+      targetClub = Club.clubName;
+    } else if (myName) {
+      // หาชุมนุมที่ครูคนนี้เป็นที่ปรึกษา
+      targetClub = clubNames.find(cName => {
+        const t_ = clubTeacherMap[cName] || '';
+        return t_.includes(myName) || myName.includes(t_);
+      }) || '';
+    }
+    // ถ้าหาไม่เจอ → เลือกชุมนุมที่มีสมาชิกมากที่สุด
+    if (!targetClub) {
+      targetClub = clubNames.sort((a, b) => clubGroups[b].length - clubGroups[a].length)[0];
+    }
 
     const savedMembers    = clubGroups[targetClub].map(s => ({ studentId: s.studentId, name: s.name, classroom: s.classroom, classroomKey: s.classroomKey || s.classroom }));
     const savedResultMap  = {};
     clubGroups[targetClub].forEach(s => { if (s.result) savedResultMap[s.studentId] = s.result; });
     const savedClubName   = targetClub;
+    const savedTeacher    = clubTeacherMap[targetClub] || '';
 
     if (savedMembers.length === 0) {
       Utils.toast('ยังไม่มีข้อมูลชุมนุมที่บันทึกไว้');
@@ -306,6 +349,7 @@ async function loadSavedClub() {
     Club.savedMembers  = savedMembers.map(m => ({ ...m })); // snapshot
     Club.resultMap     = savedResultMap;
     if (savedClubName) Club.clubName = savedClubName;
+    if (savedTeacher && !Club.teacher) Club.teacher = savedTeacher;
 
     // โหลด termDates + holidays ถ้ายังไม่มี (จำเป็นสำหรับคำนวณวันชุมนุม)
     if (!App.termDates || !App.termDates['t' + t + '_start']) {
