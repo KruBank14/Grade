@@ -75,20 +75,17 @@ function calcClubDates() {
   return dates;
 }
 
-function refreshClubDates() {
+async function refreshClubDates() {
   Club.dates = calcClubDates();
-  // sync topics ให้ตรงกับจำนวนวัน (ถ้า topics ยังไม่ถูก set จากที่บันทึกไว้)
-  if (Club.topics.length === 0 && Club.dates.length > 0) {
-    Club.topics = Club.dates.map((d, i) => '');
-  } else if (Club.topics.length !== Club.dates.length && Club.topics.length === 0) {
-    Club.topics = Array(Club.dates.length).fill('');
+  // sync topics ให้ตรงกับจำนวนวัน
+  if (Club.topics.length !== Club.dates.length) {
+    const old = Club.topics.slice();
+    Club.topics = Array(Club.dates.length).fill('').map((_, i) => old[i] || '');
   }
-  // ขยาย attMap ให้ครบทุกวัน
-  Club.members.forEach(m => {
-    if (!Club.attMap[m.studentId]) Club.attMap[m.studentId] = [];
-    while (Club.attMap[m.studentId].length < Club.dates.length) Club.attMap[m.studentId].push('ป');
-    Club.attMap[m.studentId] = Club.attMap[m.studentId].slice(0, Club.dates.length);
-  });
+  // reset attMap ทั้งหมดเพื่อให้คำนวณใหม่จาก realAttMap ตามวันใหม่
+  Club.attMap = {};
+  // โหลด realAttMap ใหม่ (วันอาจเปลี่ยน ต้องดึง Attendance ใหม่)
+  await loadClubRealAttendance();
   _renderClubActivity();
 }
 
@@ -746,6 +743,24 @@ async function saveClubData() {
     result:    Club.resultMap[m.studentId] || 'ไม่ผ่าน',
     attArray:  Club.attMap[m.studentId]    || []
   }));
+
+  // รวมสมาชิกที่ถูกลบออก (เคยอยู่ใน allClassStudents แต่ไม่อยู่ใน members แล้ว)
+  // ส่งไปพร้อม clubName = '' เพื่อให้ GAS ล้างข้อมูล
+  const currentIds = new Set(Club.members.map(m => m.studentId));
+  Object.entries(Club.allClassStudents).forEach(([cls, students]) => {
+    students.forEach(s => {
+      if (s.inOtherClub && !currentIds.has(s.studentId)) {
+        records.push({
+          studentId: s.studentId,
+          classroom: cls,
+          attended:  0,
+          result:    '',
+          attArray:  [],
+          _remove:   true  // flag ให้ GAS รู้ว่าต้องล้าง
+        });
+      }
+    });
+  });
 
   Utils.showLoading('บันทึกชุมนุม...');
   try {
