@@ -887,25 +887,64 @@ function recalcTots(tr) {
 
 function applySubConfig() {
   if (!App.students.length) return Utils.toast('โหลดรายชื่อก่อน', 'error');
-  if (ScoreLogic.getUnitsMax(1) > (50)) return Utils.toast(`เทอม 1: คะแนนรวมเกิน ${50}`, 'error');
-  if (ScoreLogic.getUnitsMax(2) > 50) return Utils.toast('เทอม 2: คะแนนรวมเกิน 50', 'error');
+  if (ScoreLogic.getUnitsMax(1) > ScoreLogic.getTarget()) return Utils.toast(`เทอม 1: คะแนนรวมเกิน ${ScoreLogic.getTarget()}`, 'error');
+  if (ScoreLogic.getUnitsMax(2) > ScoreLogic.getTarget()) return Utils.toast(`เทอม 2: คะแนนรวมเกิน ${ScoreLogic.getTarget()}`, 'error');
   ScoreLogic.syncHiddenInputs(); refreshUnitPanelLabels();
-  
+
+  // snapshot โดยใช้ key "unit-item" แทน index เพื่อรองรับกรณีโครงสร้างเปลี่ยน
   const snap = {};
-  $$('#gtBody tr[data-sid]').forEach(tr => snap[tr.getAttribute('data-sid')] = {
-    t1s:[...tr.querySelectorAll('.sub1')].map(i => i.value), t2s: [...tr.querySelectorAll('.sub2')].map(i => i.value),
-    t1e: tr.querySelector('.s-t1e')?.value || '', t2e: tr.querySelector('.s-t2e')?.value || '', rStat: tr.querySelector('.r-status')?.value || ''
+  $$('#gtBody tr[data-sid]').forEach(tr => {
+    const sid = tr.getAttribute('data-sid');
+    snap[sid] = { t1: {}, t2: {}, t1e: '', t2e: '', examSub1: {}, examSub2: {} };
+    tr.querySelectorAll('.sub1').forEach(inp => {
+      snap[sid].t1[`${inp.dataset.unit}-${inp.dataset.item}`] = inp.value;
+    });
+    tr.querySelectorAll('.sub2').forEach(inp => {
+      snap[sid].t2[`${inp.dataset.unit}-${inp.dataset.item}`] = inp.value;
+    });
+    tr.querySelectorAll('.exam-sub1').forEach(inp => {
+      snap[sid].examSub1[inp.dataset.examflatidx] = inp.value;
+    });
+    tr.querySelectorAll('.exam-sub2').forEach(inp => {
+      snap[sid].examSub2[inp.dataset.examflatidx] = inp.value;
+    });
+    snap[sid].t1e = tr.querySelector('.s-t1e')?.value || '';
+    snap[sid].t2e = tr.querySelector('.s-t2e')?.value || '';
+  });
+
+  // อัปเดต App.students.grades ด้วยค่าจาก snapshot (ก่อน rebuild)
+  // เพื่อให้ buildBody โหลดค่าที่ถูกต้อง
+  (App.students || []).forEach(s => {
+    const d = snap[s.studentId]; if (!d) return;
+    const g = s.grades || {};
+    // ไม่ต้อง remap sub arrays เพราะ buildBody อ่านจาก grades.t1_sub ตาม flat index
+    // แต่ถ้าโครงสร้างเปลี่ยนจริงๆ ข้อมูลใน grades จะไม่ตรงอยู่แล้ว
+    // → ปล่อยให้ GAS recalculate เมื่อบันทึก
+    if (d.t1e) g.t1_exam = d.t1e;
+    if (d.t2e) g.t2_exam = d.t2e;
   });
 
   buildTable();
 
+  // restore ค่าจาก snapshot โดย match key
   $$('#gtBody tr[data-sid]').forEach(tr => {
     const d = snap[tr.getAttribute('data-sid')]; if (!d) return;
-    tr.querySelectorAll('.sub1').forEach((inp, i) => { if (d.t1s[i] !== undefined) inp.value = d.t1s[i]; });
-    tr.querySelectorAll('.sub2').forEach((inp, i) => { if (d.t2s[i] !== undefined) inp.value = d.t2s[i]; });
+    tr.querySelectorAll('.sub1').forEach(inp => {
+      const key = `${inp.dataset.unit}-${inp.dataset.item}`;
+      if (d.t1[key] !== undefined) inp.value = d.t1[key];
+    });
+    tr.querySelectorAll('.sub2').forEach(inp => {
+      const key = `${inp.dataset.unit}-${inp.dataset.item}`;
+      if (d.t2[key] !== undefined) inp.value = d.t2[key];
+    });
+    tr.querySelectorAll('.exam-sub1').forEach(inp => {
+      if (d.examSub1[inp.dataset.examflatidx] !== undefined) inp.value = d.examSub1[inp.dataset.examflatidx];
+    });
+    tr.querySelectorAll('.exam-sub2').forEach(inp => {
+      if (d.examSub2[inp.dataset.examflatidx] !== undefined) inp.value = d.examSub2[inp.dataset.examflatidx];
+    });
     if (tr.querySelector('.s-t1e')) tr.querySelector('.s-t1e').value = d.t1e;
     if (tr.querySelector('.s-t2e')) tr.querySelector('.s-t2e').value = d.t2e;
-    if (tr.querySelector('.r-status') && d.rStat) tr.querySelector('.r-status').value = d.rStat;
     const any1 = tr.querySelector('.sub1'), any2 = tr.querySelector('.sub2');
     if (any1) calcSub(any1, 1); if (any2) calcSub(any2, 2); if (!any1 && !any2) recalcTots(tr);
   });
