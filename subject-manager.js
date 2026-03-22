@@ -1,21 +1,21 @@
 // =====================================================
 // subject-manager.js — จัดการรายวิชาแต่ละชั้นเรียน (Admin)
 // =====================================================
-// ประเภทวิชา:
-//   "yearly"   = วิชาทั้งปี (ไม่มีเลขท้าย) → แสดงทั้ง 2 เทอม
-//   "sequence" = วิชาต่อเนื่อง (มีเลขท้าย คี่=เทอม1, คู่=เทอม2)
+// ทุกวิชามี 1 ชีต กรอกได้ทั้งเทอม 1 และ 2
 //
-// เมื่อบันทึก:
-//   1. อัปเดต Subjects_Template (Master)
-//   2. sync ชีตในไฟล์คะแนนของชั้นนั้น:
-//        - วิชาใหม่   → สร้างชีตใหม่ + header
-//        - วิชาลบออก → ลบชีต (ถามยืนยัน)
-//        - วิชาคงเดิม → ไม่แตะ (ข้อมูลคะแนนเดิมยังอยู่)
+// วิชาต่อเนื่อง (seqNums):
+//   - ชีตชื่อ "เทคโนโลยี" (ไม่มีเลขท้าย)
+//   - เก็บ seqNums: { t1: 5, t2: 6 } ใน __CONFIG__
+//   - ปพ.5/ปพ.6 เทอม 1 → แสดง "เทคโนโลยี 5"
+//   - ปพ.5/ปพ.6 เทอม 2 → แสดง "เทคโนโลยี 6"
+//   - วิชาทั่วไปไม่มี seqNums → แสดงชื่อเดิม
 // =====================================================
 
 const SubjectMgr = {
   cls:      '',
-  subjects: [],   // [{ name, type }]  type = 'yearly' | 'sequence'
+  subjects: [],   // [{ name, seqNums }]
+                  //   seqNums = null (วิชาทั่วไป)
+                  //   seqNums = { t1: 5, t2: 6 } (วิชาต่อเนื่อง)
   dirty:    false,
 
   // ── เริ่มต้น ──
@@ -28,14 +28,13 @@ const SubjectMgr = {
   },
 
   // ── โหลดวิชาจาก App.subs ──
+  // Auto-detect วิชาต่อเนื่อง: ชื่อที่มีเลขท้ายคู่ต่อเนื่องกัน
+  // เช่น "เทคโนโลยี 5","เทคโนโลยี 6" → { name:"เทคโนโลยี", seqNums:{t1:5,t2:6} }
   loadClass(cls) {
     this.cls   = cls;
     this.dirty = false;
     const raw  = (App.subs && App.subs[cls]) ? [...App.subs[cls]] : [];
-    this.subjects = raw.map(name => ({
-      name: String(name).trim(),
-      type: _smHasSeqNum_(name) ? 'sequence' : 'yearly'
-    }));
+    this.subjects = _smDetectSeq_(raw);
     this.render();
   },
 
@@ -51,24 +50,22 @@ const SubjectMgr = {
     }
 
     box.innerHTML = this.subjects.map((s, i) => {
-      const isSeq = s.type === 'sequence';
-      const badge = isSeq
-        ? `<span class="sm-badge seq">🔢 ต่อเนื่อง</span>`
-        : `<span class="sm-badge year">📅 ทั้งปี</span>`;
-      const hint = isSeq
-        ? `<span class="sm-hint">${_smTermHint_(s.name)}</span>`
-        : `<span class="sm-hint">แสดงทุกเทอม</span>`;
-
+      const isSeq  = !!s.seqNums;
+      const badge  = isSeq
+        ? `<span class="sm-badge seq" title="เทอม 1 = ${s.name} ${s.seqNums.t1} / เทอม 2 = ${s.name} ${s.seqNums.t2}">
+             🔢 ${s.seqNums.t1}/${s.seqNums.t2}
+           </span>`
+        : '';
       return `<div class="sm-row" draggable="true" data-idx="${i}">
         <span class="sm-drag" title="ลากเพื่อเรียงลำดับ">⠿</span>
         <span class="sm-num">${i + 1}</span>
         <span class="sm-name">${_smEsc_(s.name)}</span>
         ${badge}
-        ${hint}
         <div class="sm-actions">
-          <button class="sm-btn-type" onclick="SubjectMgr.toggleType(${i})">
-            ${isSeq ? '↩ เปลี่ยนเป็นทั้งปี' : '↪ เปลี่ยนเป็นต่อเนื่อง'}
-          </button>
+          ${isSeq
+            ? `<button class="sm-btn-seq" onclick="SubjectMgr.editSeq(${i})" title="แก้ไขเลขต่อเนื่อง">✏️ เลข ${s.seqNums.t1}/${s.seqNums.t2}</button>
+               <button class="sm-btn-type" onclick="SubjectMgr.removeSeq(${i})" title="เปลี่ยนเป็นวิชาทั่วไป">↩ ทั่วไป</button>`
+            : `<button class="sm-btn-type" onclick="SubjectMgr.addSeq(${i})" title="ตั้งเป็นวิชาต่อเนื่อง">↪ ต่อเนื่อง</button>`}
           <button class="sm-btn-del" onclick="SubjectMgr.deleteSubject(${i})">🗑</button>
         </div>
       </div>`;
@@ -78,46 +75,42 @@ const SubjectMgr = {
     this._updateDirtyUI();
   },
 
-  // ── สลับประเภท ──
-  toggleType(idx) {
+  // ── กำหนดเลขต่อเนื่องให้วิชา ──
+  addSeq(idx) {
+    const s    = this.subjects[idx];
+    const inp  = prompt(
+      `กำหนดเลขต่อเนื่องสำหรับ "${s.name}"\n\n` +
+      `รูปแบบ: เลขเทอม1/เลขเทอม2  เช่น 5/6 หรือ 1/2\n` +
+      `(เลขคี่=เทอม 1, เลขคู่=เทอม 2)`,
+      _smDefaultSeqNums_(this.cls, s.name)
+    );
+    if (!inp) return;
+    const nums = _smParseSeqInput_(inp);
+    if (!nums) return Utils.toast('รูปแบบไม่ถูกต้อง ใช้ เช่น 5/6', 'error');
+    this.subjects[idx] = { ...s, seqNums: nums };
+    this.dirty = true;
+    this.render();
+    Utils.toast(`✅ "${s.name}" เทอม 1 = ${nums.t1}, เทอม 2 = ${nums.t2}`);
+  },
+
+  // ── แก้ไขเลขต่อเนื่อง ──
+  editSeq(idx) {
+    const s   = this.subjects[idx];
+    const cur = `${s.seqNums.t1}/${s.seqNums.t2}`;
+    const inp = prompt(`แก้ไขเลขต่อเนื่องของ "${s.name}" (ปัจจุบัน: ${cur})`, cur);
+    if (!inp) return;
+    const nums = _smParseSeqInput_(inp);
+    if (!nums) return Utils.toast('รูปแบบไม่ถูกต้อง ใช้ เช่น 5/6', 'error');
+    this.subjects[idx] = { ...s, seqNums: nums };
+    this.dirty = true;
+    this.render();
+  },
+
+  // ── เอาเลขต่อเนื่องออก ──
+  removeSeq(idx) {
     const s = this.subjects[idx];
-    if (!s) return;
-
-    if (s.type === 'yearly') {
-      const base = s.name.replace(/\s+\d+$/, '').trim();
-      const next = this._nextSeqNum(base);
-      const odd  = next % 2 === 0 ? next - 1 : next;
-      const inp  = prompt(
-        `เปลี่ยน "${s.name}" เป็นวิชาต่อเนื่อง\n\nจะสร้าง 2 วิชา:\n  • ${base} [คี่] → เทอม 1\n  • ${base} [คู่] → เทอม 2\n\nกรอกเลขเริ่มต้น (แนะนำ: ${odd}):`,
-        String(odd)
-      );
-      if (inp === null) return;
-      const n = parseInt(inp);
-      if (isNaN(n) || n < 1) return Utils.toast('เลขไม่ถูกต้อง', 'error');
-      const o = n % 2 === 0 ? n - 1 : n;
-      this.subjects.splice(idx, 1,
-        { name: `${base} ${o}`,     type: 'sequence' },
-        { name: `${base} ${o + 1}`, type: 'sequence' }
-      );
-
-    } else {
-      const base    = s.name.replace(/\s+\d+$/, '').trim();
-      const pairIdx = this.subjects.findIndex((x, xi) =>
-        xi !== idx && x.type === 'sequence' &&
-        x.name.replace(/\s+\d+$/, '').trim() === base
-      );
-      let msg = `เปลี่ยน "${s.name}" เป็นวิชาทั้งปี "${base}"?\n(เลขท้ายจะถูกตัดออก)`;
-      if (pairIdx !== -1) msg += `\n\nพบวิชาคู่ "${this.subjects[pairIdx].name}" → จะรวมเป็นวิชาเดียวกัน`;
-      if (!confirm(msg)) return;
-
-      if (pairIdx !== -1) {
-        const lo = Math.min(idx, pairIdx), hi = Math.max(idx, pairIdx);
-        this.subjects.splice(hi, 1);
-        this.subjects.splice(lo, 1, { name: base, type: 'yearly' });
-      } else {
-        this.subjects[idx] = { name: base, type: 'yearly' };
-      }
-    }
+    if (!confirm(`เปลี่ยน "${s.name}" เป็นวิชาทั่วไป (ไม่มีเลขต่อเนื่อง)?`)) return;
+    this.subjects[idx] = { name: s.name, seqNums: null };
     this.dirty = true;
     this.render();
   },
@@ -125,7 +118,6 @@ const SubjectMgr = {
   // ── ลบวิชา ──
   deleteSubject(idx) {
     const s = this.subjects[idx];
-    if (!s) return;
     if (!confirm(`ลบวิชา "${s.name}" ออกจากชั้น ${this.cls}?\n\n⚠️ ชีตในไฟล์คะแนนจะถูกลบด้วยเมื่อกดบันทึก`)) return;
     this.subjects.splice(idx, 1);
     this.dirty = true;
@@ -134,51 +126,39 @@ const SubjectMgr = {
 
   // ── เพิ่มวิชาใหม่ ──
   addSubject() {
-    const nameEl = $('smNewName'), typeEl = $('smNewType');
-    if (!nameEl || !typeEl) return;
-    const name = nameEl.value.trim(), type = typeEl.value;
-    if (!name) return Utils.toast('กรุณากรอกชื่อวิชา', 'error');
+    const nameEl = $('smNewName');
+    if (!nameEl) return;
+    // ตัดเลขท้ายออกเสมอ (ชีตใช้ชื่อ base)
+    const name = nameEl.value.trim().replace(/\s+\d+\s*$/, '').trim();
+    if (!name)           return Utils.toast('กรุณากรอกชื่อวิชา', 'error');
     if (name.length > 80) return Utils.toast('ชื่อวิชายาวเกินไป', 'error');
-
-    if (type === 'sequence') {
-      const base = name.replace(/\s+\d+$/, '').trim();
-      const next = this._nextSeqNum(base);
-      const odd  = next % 2 === 0 ? next - 1 : next;
-      const inp  = prompt(
-        `วิชาต่อเนื่อง "${base}"\n\nจะสร้าง:\n  • ${base} [คี่] → เทอม 1\n  • ${base} [คู่] → เทอม 2\n\nกรอกเลขเริ่มต้น:`,
-        String(odd)
-      );
-      if (inp === null) return;
-      const n = parseInt(inp);
-      if (isNaN(n) || n < 1) return Utils.toast('เลขไม่ถูกต้อง', 'error');
-      const o = n % 2 === 0 ? n - 1 : n;
-      this.subjects.push({ name: `${base} ${o}`,     type: 'sequence' });
-      this.subjects.push({ name: `${base} ${o + 1}`, type: 'sequence' });
-      Utils.toast(`✅ เพิ่ม "${base} ${o}" และ "${base} ${o + 1}" แล้ว`);
-    } else {
-      if (this.subjects.find(s => s.name === name)) return Utils.toast(`วิชา "${name}" มีอยู่แล้ว`, 'error');
-      this.subjects.push({ name, type: 'yearly' });
-      Utils.toast(`✅ เพิ่ม "${name}" แล้ว`);
-    }
+    if (this.subjects.find(s => s.name === name)) return Utils.toast(`วิชา "${name}" มีอยู่แล้ว`, 'error');
+    this.subjects.push({ name, seqNums: null });
     nameEl.value = '';
     this.dirty   = true;
     this.render();
+    Utils.toast(`✅ เพิ่ม "${name}" แล้ว`);
   },
 
-  // ── บันทึก: อัปเดต Template + sync ชีตในไฟล์คะแนน ──
+  // ── บันทึก ──
   async save() {
     if (!this.dirty) return Utils.toast('ยังไม่มีการเปลี่ยนแปลง');
 
-    // อ่านปีจาก smYear (input ในหน้า admin)
     const year = ($('smYear') ? $('smYear').value : '').trim();
     if (!year || Number(year) < 2560) return Utils.toast('กรุณาระบุปีการศึกษาที่ถูกต้อง', 'error');
 
     const subjectNames = this.subjects.map(s => s.name);
+    // seqMap: { "เทคโนโลยี": { t1: 5, t2: 6 }, ... }
+    const seqMap = {};
+    this.subjects.forEach(s => { if (s.seqNums) seqMap[s.name] = s.seqNums; });
 
     if (!confirm(
       `บันทึกรายวิชาของ "${this.cls}" ปี ${year}?\n\n` +
       `${subjectNames.length} วิชา:\n` +
-      `${subjectNames.map((n, i) => `  ${i + 1}. ${n}`).join('\n')}\n\n` +
+      `${this.subjects.map((s, i) => {
+        const seq = s.seqNums ? ` [ต่อเนื่อง ${s.seqNums.t1}/${s.seqNums.t2}]` : '';
+        return `  ${i + 1}. ${s.name}${seq}`;
+      }).join('\n')}\n\n` +
       `⚠️ วิชาใหม่ → สร้างชีตในไฟล์คะแนน\n` +
       `⚠️ วิชาที่ลบ → ลบชีต (ข้อมูลหาย)`
     )) return;
@@ -188,6 +168,7 @@ const SubjectMgr = {
       const result = await api('saveSubjectsTemplate', {
         classroom: this.cls,
         subjects:  subjectNames,
+        seqMap:    seqMap,
         year:      year
       });
 
@@ -202,18 +183,6 @@ const SubjectMgr = {
       Utils.toast(e.message || 'บันทึกไม่สำเร็จ', 'error');
     }
     Utils.hideLoading();
-  },
-
-  // ── หาเลขถัดไปสำหรับวิชาต่อเนื่อง ──
-  _nextSeqNum(baseName) {
-    const base = baseName.replace(/\s+\d+$/, '').trim();
-    const nums = this.subjects
-      .filter(s => s.type === 'sequence' && s.name.replace(/\s+\d+$/, '').trim() === base)
-      .map(s => parseInt(s.name.match(/(\d+)$/)?.[1] || '0'))
-      .filter(n => !isNaN(n) && n > 0);
-    if (!nums.length) return 1;
-    const max = Math.max(...nums);
-    return max % 2 === 0 ? max + 1 : max + 2;
   },
 
   // ── อัปเดตสไตล์ปุ่มบันทึก ──
@@ -232,17 +201,16 @@ const SubjectMgr = {
     }
   },
 
-  // ── Drag-and-Drop เรียงลำดับ ──
+  // ── Drag-and-Drop ──
   _initDrag(container) {
     let dragging = null;
     container.querySelectorAll('.sm-row').forEach(row => {
       row.addEventListener('dragstart', e => {
-        dragging = row;
-        e.dataTransfer.effectAllowed = 'move';
-        setTimeout(() => { row.style.opacity = '0.35'; row.style.transform = 'scale(.98)'; }, 0);
+        dragging = row; e.dataTransfer.effectAllowed = 'move';
+        setTimeout(() => { row.style.opacity='0.35'; row.style.transform='scale(.98)'; }, 0);
       });
       row.addEventListener('dragend', () => {
-        row.style.opacity = '1'; row.style.transform = ''; dragging = null;
+        row.style.opacity='1'; row.style.transform=''; dragging=null;
         const newOrder = [...container.querySelectorAll('.sm-row')]
           .map(r => parseInt(r.dataset.idx)).filter(n => !isNaN(n));
         if (newOrder.length === this.subjects.length) {
@@ -252,18 +220,71 @@ const SubjectMgr = {
       });
       row.addEventListener('dragover', e => {
         e.preventDefault();
-        if (!dragging || dragging === row) return;
+        if (!dragging || dragging===row) return;
         const rect = row.getBoundingClientRect();
-        container.insertBefore(dragging, e.clientY < rect.top + rect.height / 2 ? row : row.nextSibling);
+        container.insertBefore(dragging, e.clientY < rect.top+rect.height/2 ? row : row.nextSibling);
       });
       row.addEventListener('dragenter', e => e.preventDefault());
     });
   }
 };
 
+// ── Auto-detect วิชาต่อเนื่องจากรายชื่อดิบ ──
+// เช่น ["เทคโนโลยี 5","เทคโนโลยี 6"] → [{ name:"เทคโนโลยี", seqNums:{t1:5,t2:6} }]
+function _smDetectSeq_(rawList) {
+  const result  = [];
+  const seen    = new Set();
+  // จัดกลุ่มตาม base name
+  const groups  = {}; // { base: [{ name, num }] }
+  for (const raw of rawList) {
+    const name = String(raw).trim();
+    const m    = name.match(/^(.+?)\s+(\d+)\s*$/);
+    if (m) {
+      const base = m[1].trim(), num = parseInt(m[2]);
+      if (!groups[base]) groups[base] = [];
+      groups[base].push({ name, num });
+    } else {
+      // วิชาไม่มีเลข
+      if (!seen.has(name)) { seen.add(name); result.push({ name, seqNums: null }); }
+    }
+  }
+  // แปลง groups → วิชาต่อเนื่อง
+  // ถ้ามีแค่ 1 ตัว (เลขเดียว) → treat เป็นวิชาทั่วไป base
+  for (const [base, items] of Object.entries(groups)) {
+    if (seen.has(base)) continue;
+    seen.add(base);
+    if (items.length >= 2) {
+      // หาเลขคี่ (t1) และเลขคู่ (t2)
+      const odd  = items.find(x => x.num % 2 === 1);
+      const even = items.find(x => x.num % 2 === 0);
+      if (odd && even) {
+        result.push({ name: base, seqNums: { t1: odd.num, t2: even.num } });
+        continue;
+      }
+    }
+    // fallback: วิชาทั่วไปชื่อ base
+    result.push({ name: base, seqNums: null });
+  }
+  return result;
+}
+
+// ── แนะนำเลขเริ่มต้นตามชั้น ──
+function _smDefaultSeqNums_(cls, subjectName) {
+  // ม.1→1/2, ม.2→3/4, ม.3→5/6 (default pattern)
+  const classMap = { 'ม.1':'1/2', 'ม.2':'3/4', 'ม.3':'5/6' };
+  return classMap[cls] || '1/2';
+}
+
+// ── parse input "5/6" หรือ "5, 6" หรือ "5 6" ──
+function _smParseSeqInput_(inp) {
+  const m = String(inp).match(/(\d+)\s*[\/,\s]\s*(\d+)/);
+  if (!m) return null;
+  const t1 = parseInt(m[1]), t2 = parseInt(m[2]);
+  if (isNaN(t1) || isNaN(t2) || t1 < 1 || t2 < 1) return null;
+  return { t1, t2 };
+}
+
 // ── helpers ──
-function _smHasSeqNum_(name)  { return /\s+\d+\s*$/.test(String(name || '')); }
-function _smTermHint_(name)   { const m = String(name||'').match(/(\d+)\s*$/); if(!m) return ''; return parseInt(m[1])%2===1?'(เทอม 1)':'(เทอม 2)'; }
-function _smEsc_(s)           { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-function toggleSubjectManager(){ const p=$('smPanel'); if(!p) return; const open=p.style.display!=='none'; p.style.display=open?'none':'block'; if(!open) SubjectMgr.init(); }
-function smChangeClass(cls)    { SubjectMgr.loadClass(cls); }
+function _smEsc_(s)        { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function toggleSubjectManager() { const p=$('smPanel'); if(!p) return; const o=p.style.display!=='none'; p.style.display=o?'none':'block'; if(!o) SubjectMgr.init(); }
+function smChangeClass(cls) { SubjectMgr.loadClass(cls); }
