@@ -139,14 +139,63 @@ function addSub(t) {
   refreshCourseOverview(); renderSubList(t);
 }
 function rmSub(t, ui) {
-  if (!confirm(`ลบ "${App.units[t][ui].name}" ?`)) return;
+  if (!confirm(`ลบ "${App.units[t][ui].name}" ?\n\nคะแนนงานย่อยทั้งหมดในหน่วยนี้จะถูกลบออกด้วย`)) return;
+
+  // คำนวณ flat index ของหน่วยนี้ก่อนลบ
+  const offsets  = ScoreLogic.getUnitOffsets(t);
+  const entry    = offsets.find(o => o.unitIndex === ui);
+  const start    = entry?.start  ?? 0;
+  const count    = entry?.count  ?? (App.units[t][ui]?.items||[]).length;
+
+  // ล้างข้อมูลจาก App.students
+  (App.students||[]).forEach(s => {
+    const sub = Array.isArray(s.grades?.[`t${t}_sub`]) ? s.grades[`t${t}_sub`] : [];
+    sub.splice(start, count);
+    if (s.grades) s.grades[`t${t}_sub`] = sub;
+  });
+
   App.units[t].splice(ui, 1);
   if (!App.activeSubUnit) App.activeSubUnit = {};
   App.activeSubUnit[t] = Math.max(0, (App.activeSubUnit[t]||0) - (ui <= (App.activeSubUnit[t]||0) ? 1 : 0));
   refreshCourseOverview(); renderSubList(t);
 }
-function addSubItem(t, ui) { App.units[t][ui].items.push({ name: `งาน ${App.units[t][ui].items.length + 1}`, max: 10 }); refreshCourseOverview(); renderSubList(t); }
-function rmSubItem(t, ui, ii) { if (confirm('ลบงานนี้?')) { App.units[t][ui].items.splice(ii, 1); refreshCourseOverview(); renderSubList(t); } }
+
+function addSubItem(t, ui) {
+  // คำนวณ flat index ที่ต้องแทรก = หลัง item สุดท้ายของหน่วยนี้
+  const offsets  = ScoreLogic.getUnitOffsets(t);
+  const entry    = offsets.find(o => o.unitIndex === ui);
+  const insertAt = (entry?.start ?? 0) + (entry?.count ?? (App.units[t][ui]?.items||[]).length);
+
+  // แทรก '' ใน grades.t${t}_sub ของทุก student ที่ตำแหน่งนั้น
+  (App.students||[]).forEach(s => {
+    const sub = Array.isArray(s.grades?.[`t${t}_sub`]) ? s.grades[`t${t}_sub`] : [];
+    while (sub.length < insertAt) sub.push('');
+    sub.splice(insertAt, 0, '');
+    if (s.grades) s.grades[`t${t}_sub`] = sub;
+  });
+
+  App.units[t][ui].items.push({ name: `งาน ${App.units[t][ui].items.length + 1}`, max: 10 });
+  refreshCourseOverview(); renderSubList(t);
+}
+
+function rmSubItem(t, ui, ii) {
+  if (!confirm('ลบงานย่อยนี้?\n\nคะแนนของงานนี้จะถูกลบออกด้วย')) return;
+
+  // คำนวณ flat index ของ item นี้
+  const offsets = ScoreLogic.getUnitOffsets(t);
+  const entry   = offsets.find(o => o.unitIndex === ui);
+  const flatIdx = (entry?.start ?? 0) + ii;
+
+  // ล้างข้อมูลจาก App.students
+  (App.students||[]).forEach(s => {
+    const sub = Array.isArray(s.grades?.[`t${t}_sub`]) ? s.grades[`t${t}_sub`] : [];
+    sub.splice(flatIdx, 1);
+    if (s.grades) s.grades[`t${t}_sub`] = sub;
+  });
+
+  App.units[t][ui].items.splice(ii, 1);
+  refreshCourseOverview(); renderSubList(t);
+}
 
 function renderSubList(t) {
   const wrap = $(`subList_${t}`); if (!wrap) return;
@@ -354,11 +403,35 @@ function rmExam(t, ei) {
   updateAutoScoreDisplay();
 }
 function addExamItem(t, ei) {
+  // คำนวณ flat index ที่ต้องแทรก = หลัง item สุดท้ายของ examUnit นี้
+  let insertAt = 0;
+  (App.examUnits[t]||[]).forEach((eu, i) => { if (i <= ei) insertAt += (eu.items||[]).length; });
+
+  (App.students||[]).forEach(s => {
+    const sub = Array.isArray(s.grades?.[`t${t}_exam_sub`]) ? s.grades[`t${t}_exam_sub`] : [];
+    while (sub.length < insertAt) sub.push('');
+    sub.splice(insertAt, 0, '');
+    if (s.grades) s.grades[`t${t}_exam_sub`] = sub;
+  });
+
   App.examUnits[t][ei].items.push({ name: `สอบย่อย ${App.examUnits[t][ei].items.length + 1}`, max: 10 });
   renderSubList(t);
 }
+
 function rmExamItem(t, ei, ii) {
-  if (!confirm('ลบรายการสอบย่อยนี้?')) return;
+  if (!confirm('ลบสอบย่อยนี้?\n\nคะแนนของสอบย่อยนี้จะถูกลบออกด้วย')) return;
+
+  // คำนวณ flat index: นับ items ของ examUnit ก่อนหน้าทั้งหมด + ii
+  let flatStart = 0;
+  (App.examUnits[t]||[]).forEach((eu, i) => { if (i < ei) flatStart += (eu.items||[]).length; });
+  const flatIdx = flatStart + ii;
+
+  (App.students||[]).forEach(s => {
+    const sub = Array.isArray(s.grades?.[`t${t}_exam_sub`]) ? s.grades[`t${t}_exam_sub`] : [];
+    sub.splice(flatIdx, 1);
+    if (s.grades) s.grades[`t${t}_exam_sub`] = sub;
+  });
+
   App.examUnits[t][ei].items.splice(ii, 1);
   renderSubList(t);
 }
