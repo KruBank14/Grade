@@ -80,7 +80,6 @@ function _subjMatchesTerm(subjectName, term) {
 
 function switchGradeTerm(term) {
   App.gradeTerm = term;
-  // อัปเดต style ปุ่ม
   const btn1 = $('termTab1'), btn2 = $('termTab2');
   if (btn1) {
     btn1.style.background = term === 1 ? '#6d28d9' : '#fff';
@@ -90,10 +89,11 @@ function switchGradeTerm(term) {
     btn2.style.background = term === 2 ? '#6d28d9' : '#fff';
     btn2.style.color      = term === 2 ? '#fff'    : '#6d28d9';
   }
-  updateSubjDrop();
-  // ถ้าโหลดข้อมูลอยู่แล้ว และวิชาที่เลือกไม่มีเลข → rebuild ตารางตามเทอมใหม่
+  // อัปเดต dropdown เฉพาะเมื่อไม่ได้ล็อกอยู่
+  if (!App.loadedSubject) updateSubjDrop();
+  // rebuild ตารางตามเทอมใหม่ (ถ้าวิชาไม่มีเลขท้าย)
   if (App.students && App.students.length) {
-    const subj = $('gSubj')?.value || '';
+    const subj = App.loadedSubject || $('gSubj')?.value || '';
     const hasNum = /\s\d+$/.test(subj);
     if (!hasNum) {
       App.subjOnlyTerm = term;
@@ -109,6 +109,12 @@ function updateSubjDrop() {
   const sel  = $('gSubj');
   if (!sel) return;
   sel.innerHTML = '';
+
+  // ตัวเลือกว่างเสมอเป็นค่าเริ่มต้น
+  const emptyOpt = document.createElement('option');
+  emptyOpt.value = '';
+  emptyOpt.textContent = '— เลือกรายวิชา —';
+  sel.appendChild(emptyOpt);
 
   let allSubs = [];
 
@@ -134,12 +140,12 @@ function updateSubjDrop() {
 
   // กรองตามเทอม
   const filtered = allSubs.filter(s => _subjMatchesTerm(s, term));
-
-  if (filtered.length > 0) {
-    filtered.forEach(s => sel.innerHTML += `<option value="${s}">${s}</option>`);
-  } else {
-    sel.innerHTML = '<option value="">-- ไม่พบวิชา --</option>';
-  }
+  filtered.forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s;
+    opt.textContent = s;
+    sel.appendChild(opt);
+  });
 }
 
 // =====================================================
