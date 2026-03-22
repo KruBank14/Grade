@@ -27,6 +27,20 @@ function _clubShortDate(dStr) {
 }
 
 // ── คำนวณวันที่ชุมนุม (กรองจากช่วงเทอม + วันที่เลือก + ตัดวันหยุด) ──
+// ── normalize attArray: แปลงค่าให้เป็น 'ป'/'ข'/'ล'/'-' ──
+// รองรับทั้งค่าจาก Club ('ป','ข','ล') และ Attendance ('ม','ข','ล','ป')
+// และค่าเก่า ('เข้า', 'ขาด' ฯลฯ)
+function _normalizeAtt_(arr) {
+  return (arr || []).map(v => {
+    const s = String(v || '').trim();
+    if (s === 'ม' || s === 'ป' || s === 'เข้า' || s === '1') return 'ป'; // มา
+    if (s === 'ข' || s === 'ขาด' || s === '0')                 return 'ข'; // ขาด
+    if (s === 'ล' || s === 'ลา'  || s === 'ป่วย')              return 'ล'; // ลา
+    if (s === '-')                                              return '-'; // ไม่นับ
+    return 'ป'; // default = มา
+  });
+}
+
 function calcClubDates() {
   const term      = Club.term;
   const dayOfWeek = parseInt(Club.dayOfWeek);
@@ -226,7 +240,7 @@ async function loadSavedClub() {
       savedMembers.forEach(m => {
         const d = aMap[m.studentId];
         if (d) {
-          Club.attMap[m.studentId]    = d.attArray || [];
+          Club.attMap[m.studentId]    = _normalizeAtt_(d.attArray);
           Club.resultMap[m.studentId] = d.result   || 'ไม่ผ่าน';
         }
       });
@@ -708,7 +722,7 @@ async function loadClubAttendance() {
     Club.members.forEach(m => {
       const d = aMap[m.studentId];
       if (d) {
-        Club.attMap[m.studentId]    = d.attArray || [];
+        Club.attMap[m.studentId]    = _normalizeAtt_(d.attArray);
         Club.resultMap[m.studentId] = d.result   || 'ไม่ผ่าน';
       }
     });
