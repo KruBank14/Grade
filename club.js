@@ -1234,12 +1234,11 @@ function printClubReport() {
     <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>${css}</style></head><body>
     ${pageCover}${pageRoster}${pageActivity}${pageAtt}
-    </body></html>`;
+    <script>window.onload=()=>setTimeout(()=>window.print(),800);<\/script></body></html>`;
 
   const win = window.open('', '_blank');
   if (!win) return Utils.toast('กรุณาอนุญาต Popup', 'error');
   win.document.open();
   win.document.write(html);
   win.document.close();
-  win.onload = () => setTimeout(() => win.print(), 800);
 }
