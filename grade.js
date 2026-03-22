@@ -675,10 +675,10 @@ function buildHead() {
   if (isYear) {
     const keepAll = ScoreLogic.getUnitsMax(1) + ScoreLogic.getUnitsMax(2);
     const examAll = ScoreLogic.getExamMax(1)  + ScoreLogic.getExamMax(2);
-    r1 += `<th rowspan="3" class="th-t1sc" style="width:80px;background:#ede9fe;color:#6d28d9;">เก็บ ท.1<br><small>(${ScoreLogic.getUnitsMax(1)})</small></th>
+    r1 += `<th rowspan="3" class="th-t1sc" style="width:80px;background:#ede9fe;color:#fff;">เก็บ ท.1<br><small>(${ScoreLogic.getUnitsMax(1)})</small></th>
             <th rowspan="3" class="th-t1e"  style="width:72px;">สอบ ท.1<br><small>(${ScoreLogic.getExamMax(1)})</small></th>
             <th rowspan="3" class="th-t1t"  style="width:80px;">รวม ท.1<br><small>(${tgt})</small></th>
-            <th rowspan="3" class="th-t2sc" style="width:80px;background:#dbeafe;color:#1d4ed8;">เก็บ ท.2<br><small>(${ScoreLogic.getUnitsMax(2)})</small></th>
+            <th rowspan="3" class="th-t2sc" style="width:80px;background:#dbeafe;color:#fff;">เก็บ ท.2<br><small>(${ScoreLogic.getUnitsMax(2)})</small></th>
             <th rowspan="3" class="th-t2e"  style="width:72px;">สอบ ท.2<br><small>(${ScoreLogic.getExamMax(2)})</small></th>
             <th rowspan="3" class="th-t2t"  style="width:80px;">รวม ท.2<br><small>(${tgt})</small></th>
             <th rowspan="3" style="width:80px;background:#16a34a;color:#fff;">เก็บทั้งปี<br><small>(${keepAll})</small></th>
