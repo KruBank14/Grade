@@ -79,12 +79,23 @@ function _subjMatchesTerm(subjectName, term) {
 }
 
 function switchGradeTerm(term) {
-  App.gradeTerm = term;
+  App.gradeTerm  = term;
+  App.activeTerm = term;
+
+  // สี Tab
   const btn1 = $('termTab1'), btn2 = $('termTab2');
   if (btn1) { btn1.style.background = term===1?'#6d28d9':'#fff'; btn1.style.color = term===1?'#fff':'#6d28d9'; }
   if (btn2) { btn2.style.background = term===2?'#6d28d9':'#fff'; btn2.style.color = term===2?'#fff':'#6d28d9'; }
+
+  // อัปเดต label ปุ่มบันทึก
+  const saveBtn = document.querySelector('.btn-save');
+  if (saveBtn) saveBtn.textContent = `💾 บันทึกเทอม ${term}`;
+
   // อัปเดต dropdown เฉพาะเมื่อไม่ได้ล็อกอยู่
-  if (!App.loadedSubject) updateSubjDrop();
+  if (!App.loadedSubject) { updateSubjDrop(); return; }
+
+  // rebuild ตารางเทอมใหม่ (ถ้ามีข้อมูลอยู่แล้ว)
+  if (App.students && App.students.length && typeof buildTable === 'function') buildTable();
 }
 
 function updateSubjDrop() {
