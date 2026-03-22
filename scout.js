@@ -692,12 +692,11 @@ function printScoutReport() {
     '<style>' + css + '</style></head><body>' +
     term1Pages +
     term2Pages +
-    '</body></html>';
+    '<script>window.onload=()=>setTimeout(()=>window.print(),800);<\/script></body></html>';
 
   win.document.open();
   win.document.write(html);
   win.document.close();
-  win.onload = () => setTimeout(() => win.print(), 800);
 }
 
 
