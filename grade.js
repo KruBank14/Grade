@@ -163,11 +163,11 @@ async function loadGrades() {
   const subjTermMatch = subj.match(/\s(\d+)$/);
   const subjTermNum = subjTermMatch ? parseInt(subjTermMatch[1]) : 0;
   // วิชามีเลขท้าย → ใช้เลขนั้นตัดสิน (คี่=เทอม1, คู่=เทอม2)
-  // วิชาไม่มีเลข → ใช้ gradeTerm ที่ผู้ใช้กดปุ่มเลือกไว้
+  // วิชาไม่มีเลข → แสดงทั้ง 2 เทอมเสมอ (subjOnlyTerm = 0)
   if (subjTermNum > 0) {
     App.subjOnlyTerm = subjTermNum % 2 === 1 ? 1 : 2;
   } else {
-    App.subjOnlyTerm = App.gradeTerm || 1; // default เทอม 1
+    App.subjOnlyTerm = 0; // แสดง + บันทึก ทั้ง 2 เทอม
   }
 
   $('lblClass').textContent = cls; $('lblSubj').textContent = subj;
@@ -553,19 +553,43 @@ async function saveGrades() {
   if (ScoreLogic.getUnitsMax(2) > 50)
     return Utils.toast('เทอม 2: คะแนนรวมหน่วยเกิน 50', 'error');
 
+  // สร้าง snapshot จาก App.students (ข้อมูลที่โหลดมาล่าสุด) เป็น fallback
+  // กรณีที่เทอมใดเทอมหนึ่งไม่มี DOM input (วิชาเลขท้ายแสดงเทอมเดียว)
+  const stuMap = {};
+  (App.students || []).forEach(s => { stuMap[s.studentId] = s.grades || {}; });
+
   const records = [];
   $$('#gtBody tr[data-sid]').forEach(tr => {
-    const t1sv = [...tr.querySelectorAll('.sub1')].map(i => i.value);
-    const t2sv = [...tr.querySelectorAll('.sub2')].map(i => i.value);
-    records.push({
-      studentId: tr.getAttribute('data-sid'),
-      t1_sub:  t1sv,
-      t1_acc:  ScoreLogic.calcKeepFromFlat(1, t1sv),
-      t1_exam: tr.querySelector('.s-t1e')?.value || '',
-      t2_sub:  t2sv,
-      t2_acc:  ScoreLogic.calcKeepFromFlat(2, t2sv),
-      t2_exam: tr.querySelector('.s-t2e')?.value || '',
-    });
+    const sid = tr.getAttribute('data-sid');
+    const snap = stuMap[sid] || {}; // ข้อมูลเดิมจาก server
+
+    // เทอม 1: อ่านจาก DOM ก่อน ถ้าไม่มี input ใช้ค่าเดิม
+    const t1Inputs = [...tr.querySelectorAll('.sub1')];
+    const t1sv = t1Inputs.length > 0
+      ? t1Inputs.map(i => i.value)
+      : (Array.isArray(snap.t1_sub) ? snap.t1_sub : []);
+    const t1_acc  = t1Inputs.length > 0
+      ? ScoreLogic.calcKeepFromFlat(1, t1sv)
+      : (Number(snap.t1_acc) || 0);
+    const t1ExamEl = tr.querySelector('.s-t1e');
+    const t1_exam = t1ExamEl
+      ? (t1ExamEl.value || '')
+      : (snap.t1_exam ?? '');
+
+    // เทอม 2: อ่านจาก DOM ก่อน ถ้าไม่มี input ใช้ค่าเดิม
+    const t2Inputs = [...tr.querySelectorAll('.sub2')];
+    const t2sv = t2Inputs.length > 0
+      ? t2Inputs.map(i => i.value)
+      : (Array.isArray(snap.t2_sub) ? snap.t2_sub : []);
+    const t2_acc  = t2Inputs.length > 0
+      ? ScoreLogic.calcKeepFromFlat(2, t2sv)
+      : (Number(snap.t2_acc) || 0);
+    const t2ExamEl = tr.querySelector('.s-t2e');
+    const t2_exam = t2ExamEl
+      ? (t2ExamEl.value || '')
+      : (snap.t2_exam ?? '');
+
+    records.push({ studentId: sid, t1_sub: t1sv, t1_acc, t1_exam, t2_sub: t2sv, t2_acc, t2_exam });
   });
 
   if (!records.length) return Utils.toast('ยังไม่มีข้อมูล', 'warning');
@@ -576,6 +600,17 @@ async function saveGrades() {
       year, classroom: cls, subject: subj,
       config: buildConfigPayload(),
       gradeRecords: records
+    });
+    // อัปเดต snapshot ให้ตรงกับที่เพิ่งบันทึก
+    records.forEach(rec => {
+      if (stuMap[rec.studentId]) {
+        stuMap[rec.studentId].t1_sub  = rec.t1_sub;
+        stuMap[rec.studentId].t1_acc  = rec.t1_acc;
+        stuMap[rec.studentId].t1_exam = rec.t1_exam;
+        stuMap[rec.studentId].t2_sub  = rec.t2_sub;
+        stuMap[rec.studentId].t2_acc  = rec.t2_acc;
+        stuMap[rec.studentId].t2_exam = rec.t2_exam;
+      }
     });
     Utils.toast('✅ ' + res);
   } catch (e) {
