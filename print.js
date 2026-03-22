@@ -195,22 +195,25 @@ function buildPp6HTML(d, type) {
   const fullCls = classLabel(d.classroom).replace(/ภาคเรียนที่\s*[12]/g,'').trim();
   const yearLbl = isSem ? `ภาคเรียนที่ ${termNo} ปีการศึกษา ${d.year}`
     : type === 'term1' ? `ภาคเรียนที่ 1 ปีการศึกษา ${d.year}`
+    : type === 'term2' ? `ภาคเรียนที่ 2 ปีการศึกษา ${d.year}`
     : `ปีการศึกษา ${d.year}`;
-  const maxScore = isSem ? 100 : (type === 'term1' ? 50 : 100);
+  const maxScore = isSem ? 100
+    : type === 'term1' ? 50
+    : type === 'term2' ? 50
+    : 100; // ทั้งปี = T1+T2
 
   const isMathMode = !!(App && App._pp6MathMode);
-  const mkRow = (s) => isMathMode
+  // ประถมเทอม 1: แสดงแค่คะแนน ไม่มีเกรด
+  const isPrathumT1 = !isMathMode && type === 'term1';
+  const mkRow = (s) => isPrathumT1
     ? `<tr><td>${escH(s.name)}</td>
-       <td class="center">${s.score === '' ? '' : s.score}</td>
-       <td class="center" style="font-weight:700;">${escH(s.grade)}</td></tr>`
+       <td class="center">${s.score === '' ? '' : s.score}</td></tr>`
     : `<tr><td>${escH(s.name)}</td>
-       <td class="center">${s.keep === '' || s.keep == null ? '' : s.keep}</td>
-       <td class="center">${s.exam === '' || s.exam == null ? '' : s.exam}</td>
        <td class="center">${s.score === '' ? '' : s.score}</td>
-       <td class="center">${escH(s.grade)}</td></tr>`;
-  const emptyRow = isMathMode
-    ? `<tr><td>-</td><td></td><td></td></tr>`
-    : `<tr><td>-</td><td></td><td></td><td></td><td></td></tr>`;
+       <td class="center" style="font-weight:700;">${escH(s.grade)}</td></tr>`;
+  const emptyRow = isPrathumT1
+    ? `<tr><td>-</td><td></td></tr>`
+    : `<tr><td>-</td><td></td><td></td></tr>`;
   const basicRows = d.basicSubjects.map(mkRow).join('') || emptyRow;
   const addRows   = d.addSubjects.map(mkRow).join('')   || emptyRow;
 
@@ -233,36 +236,33 @@ function buildPp6HTML(d, type) {
   </table>
   <table style="width:100%;border-collapse:collapse;table-layout:fixed;font-size:14px;margin-bottom:10px;">
     <thead>
-      ${isMathMode ? `
+      ${isPrathumT1 ? `
+      <tr><th colspan="2">หลักสูตรการศึกษาขั้นพื้นฐาน</th></tr>
+      <tr>
+        <th style="width:75%;">ชื่อวิชา</th>
+        <th style="width:25%;">รวม ${maxScore} คะแนน</th>
+      </tr>` : `
       <tr><th colspan="3">หลักสูตรการศึกษาขั้นพื้นฐาน</th></tr>
       <tr>
         <th style="width:60%;">ชื่อวิชา</th>
-        <th style="width:20%;">รวม (/${maxScore})</th>
+        <th style="width:20%;">รวม ${maxScore} คะแนน</th>
         <th style="width:20%;">ผลการเรียน</th>
-      </tr>` : `
-      <tr><th colspan="5">หลักสูตรการศึกษาขั้นพื้นฐาน</th></tr>
-      <tr>
-        <th style="width:46%;">ชื่อวิชา</th>
-        <th style="width:13%;">เก็บ</th>
-        <th style="width:13%;">สอบ</th>
-        <th style="width:13%;">รวม (/${maxScore})</th>
-        <th style="width:15%;">ผลการเรียน</th>
       </tr>`}
     </thead>
     <tbody>
-      ${isMathMode
-        ? `<tr><td colspan="3" style="background:#e5e7eb;font-weight:700;text-align:center;">วิชาพื้นฐาน</td></tr>`
-        : `<tr><td colspan="5" style="background:#e5e7eb;font-weight:700;text-align:center;">วิชาพื้นฐาน</td></tr>`}
+      ${isPrathumT1
+        ? `<tr><td colspan="2" style="background:#e5e7eb;font-weight:700;text-align:center;">วิชาพื้นฐาน</td></tr>`
+        : `<tr><td colspan="3" style="background:#e5e7eb;font-weight:700;text-align:center;">วิชาพื้นฐาน</td></tr>`}
       ${basicRows}
-      ${isMathMode
-        ? `<tr><td colspan="3" style="background:#e5e7eb;font-weight:700;text-align:center;">วิชาเพิ่มเติม</td></tr>`
-        : `<tr><td colspan="5" style="background:#e5e7eb;font-weight:700;text-align:center;">วิชาเพิ่มเติม</td></tr>`}
+      ${isPrathumT1
+        ? `<tr><td colspan="2" style="background:#e5e7eb;font-weight:700;text-align:center;">วิชาเพิ่มเติม</td></tr>`
+        : `<tr><td colspan="3" style="background:#e5e7eb;font-weight:700;text-align:center;">วิชาเพิ่มเติม</td></tr>`}
       ${addRows}
+      ${isPrathumT1 ? '' : `
       <tr style="font-weight:700;">
-        ${isMathMode
-          ? `<td colspan="2" class="center">เกรดเฉลี่ย (GPA)</td><td class="center">${escH(d.hasR ? 'รอผล (ติด ร)' : d.gpa)}</td>`
-          : `<td colspan="4" class="center">เกรดเฉลี่ย (GPA)</td><td class="center">${escH(d.hasR ? 'รอผล (ติด ร)' : d.gpa)}</td>`}
-      </tr>
+        <td colspan="2" class="center">เกรดเฉลี่ย (GPA)</td>
+        <td class="center">${escH(d.hasR ? 'รอผล (ติด ร)' : d.gpa)}</td>
+      </tr>`}
     </tbody>
   </table>
   <div style="display:flex;gap:12px;margin-top:8px;">
@@ -299,6 +299,10 @@ async function fetchPp6SummaryData(type = 'year') {
 }
 
 async function printRowPDF(sid, type = 'year') {
+  const win = window.open('', '_blank');
+  if (!win) return Utils.toast('กรุณาอนุญาต Popup ใน browser ด้วยครับ', 'error');
+  win.document.write('<html><body style="font-family:sans-serif;padding:20px;"><p>⏳ กำลังโหลดข้อมูล...</p></body></html>');
+
   Utils.showLoading('กำลังเตรียม ปพ.6...');
   try {
     const res = await fetchPp6SummaryData(type);
@@ -306,13 +310,8 @@ async function printRowPDF(sid, type = 'year') {
 
     if (!stu) {
       Utils.hideLoading();
+      win.close();
       return Utils.toast('ไม่พบข้อมูลนักเรียน', 'error');
-    }
-
-    const win = window.open('', '_blank');
-    if (!win) {
-      Utils.hideLoading();
-      return Utils.toast('อนุญาต Popup ด้วยครับ', 'error');
     }
 
     const body = buildPp6HTML(stu, type);
@@ -348,6 +347,10 @@ async function printPp6Auto(type = 'year') {
 async function printClassPDF(type = 'year') {
   if (!confirm(`พิมพ์ ปพ.6 ${type === 'term1' ? 'ภาคเรียนที่ 1' : 'ทั้งปี'} ทั้งห้อง?`)) return;
 
+  const win = window.open('', '_blank');
+  if (!win) return Utils.toast('กรุณาอนุญาต Popup ใน browser ด้วยครับ', 'error');
+  win.document.write('<html><body style="font-family:sans-serif;padding:20px;"><p>⏳ กำลังโหลดข้อมูล...</p></body></html>');
+
   Utils.showLoading('กำลังเตรียม ปพ.6 ทั้งห้อง...');
   try {
     const res = await fetchPp6SummaryData(type);
@@ -355,13 +358,8 @@ async function printClassPDF(type = 'year') {
 
     if (!students.length) {
       Utils.hideLoading();
+      win.close();
       return Utils.toast('ไม่พบข้อมูลนักเรียน', 'error');
-    }
-
-    const win = window.open('', '_blank');
-    if (!win) {
-      Utils.hideLoading();
-      return Utils.toast('อนุญาต Popup ด้วยครับ', 'error');
     }
 
     const pages = students.map(stu => buildPp6HTML(stu, type)).join('\n');
@@ -393,18 +391,24 @@ async function printSummaryPDF(type = 'year') {
     : type === 'term2' ? `ภาคเรียนที่ 2 ปีการศึกษา ${year}`
     : `ปีการศึกษา ${year}`;
 
+  // เปิด window ทันที (ก่อน await) เพื่อหลีกเลี่ยง popup blocker
+  const win = window.open('', '_blank');
+  if (!win) return Utils.toast('กรุณาอนุญาต Popup ใน browser ด้วยครับ', 'error');
+  win.document.write('<html><body style="font-family:sans-serif;padding:20px;"><p>⏳ กำลังโหลดข้อมูล...</p></body></html>');
+
   Utils.showLoading('กำลังโหลดข้อมูลสรุปเกรด...');
   let res;
   try {
     res = await api('getPp6FromSummary', { year, classroom, mode: type });
   } catch(e) {
     Utils.hideLoading();
+    win.close();
     return Utils.toast(e.message || 'โหลดข้อมูลไม่สำเร็จ', 'error');
   }
   Utils.hideLoading();
 
   const students = res.students || [];
-  if (!students.length) return Utils.toast('ไม่พบข้อมูลนักเรียน', 'error');
+  if (!students.length) { win.close(); return Utils.toast('ไม่พบข้อมูลนักเรียน', 'error'); }
 
   // รวบรวมชื่อวิชาทั้งหมด (basic + add) จากนักเรียนทุกคน
   const basicNames = [], addNames = [], seenB = new Set(), seenA = new Set();
@@ -529,8 +533,6 @@ async function printSummaryPDF(type = 'year') {
   ${pages}
   </body></html>`;
 
-  const win = window.open('', '_blank');
-  if (!win) return Utils.toast('อนุญาต Popup ด้วยครับ', 'error');
   writeToPrintWindow(win, html);
 }
 
@@ -1192,6 +1194,10 @@ async function _doPrintPp5(termNum) {
   const students = App.students || [];
   if (!students.length) return Utils.toast('ไม่พบข้อมูลนักเรียน', 'error');
 
+  const win = window.open('', '_blank');
+  if (!win) return Utils.toast('กรุณาอนุญาต Popup ใน browser ด้วยครับ', 'error');
+  win.document.write('<html><body style="font-family:sans-serif;padding:20px;"><p>⏳ กำลังโหลดข้อมูล...</p></body></html>');
+
   Utils.showLoading('กำลังโหลดข้อมูลการมาเรียน...');
   let attData = null;
   try {
@@ -1211,9 +1217,6 @@ async function _doPrintPp5(termNum) {
     Utils.toast('โหลดข้อมูลการมาเรียนไม่ได้: ' + e.message, 'error');
   }
   Utils.hideLoading();
-
-  const win = window.open('', '_blank');
-  if (!win) return Utils.toast('อนุญาต Popup ด้วยครับ', 'error');
 
   const d = getPp5Data(termNum);
 
