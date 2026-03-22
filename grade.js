@@ -681,8 +681,8 @@ function buildHead() {
             <th rowspan="3" class="th-t2sc" style="width:80px;background:#dbeafe;color:#1d4ed8;">เก็บ ท.2<br><small>(${ScoreLogic.getUnitsMax(2)})</small></th>
             <th rowspan="3" class="th-t2e"  style="width:72px;">สอบ ท.2<br><small>(${ScoreLogic.getExamMax(2)})</small></th>
             <th rowspan="3" class="th-t2t"  style="width:80px;">รวม ท.2<br><small>(${tgt})</small></th>
-            <th rowspan="3" style="width:80px;background:#166534;color:#fff;">เก็บทั้งปี<br><small>(${keepAll})</small></th>
-            <th rowspan="3" style="width:72px;background:#075985;color:#fff;">สอบทั้งปี<br><small>(${examAll})</small></th>`;
+            <th rowspan="3" style="width:80px;background:#16a34a;color:#fff;">เก็บทั้งปี<br><small>(${keepAll})</small></th>
+            <th rowspan="3" style="width:72px;background:#ea580c;color:#fff;">สอบทั้งปี<br><small>(${examAll})</small></th>`;
   } else {
     const units = App.units[t] || [];
     const uIdx  = App.activeUnit ?? null;
