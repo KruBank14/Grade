@@ -86,9 +86,18 @@ function switchClubTab(term, btn) {
   Club.term = String(term);
   document.querySelectorAll('#clubTabs .ttab').forEach(b => b.classList.remove('on'));
   if (btn) btn.classList.add('on');
+  // reset ข้อมูลทั้งหมดของเทอมเดิม
   Club.allClassStudents = {};
   Club.loadErrors = {};
   Club.loaded = false;
+  Club.members    = [];
+  Club.topics     = [];
+  Club.attMap     = {};
+  Club.resultMap  = {};
+  Club.dates      = [];
+  Club.clubName   = '';
+  Club.teacher    = '';
+  Club.dayOfWeek  = '5';
   _renderClubMain();
 }
 
@@ -476,8 +485,11 @@ function _renderClubActivity() {
 
     const nP    = att.filter(v => v === 'ป').length;
     const nBase = att.filter(v => v !== '-').length;
-    const result = Club.resultMap[m.studentId] ||
-      (nBase > 0 && nP >= Math.ceil(nBase * 0.8) ? 'ผ่าน' : 'ไม่ผ่าน');
+    // คำนวณผลจาก attMap จริงๆ เสมอ (ไม่ใช้ค่าเก่าที่อาจผิด)
+    const result = nBase > 0
+      ? (nP >= Math.ceil(nBase * 0.8) ? 'ผ่าน' : 'ไม่ผ่าน')
+      : (Club.resultMap[m.studentId] || 'ไม่ผ่าน');
+    Club.resultMap[m.studentId] = result;
 
     const rCl = result==='ผ่าน'?'#16a34a':'#dc2626';
     const rBg = result==='ผ่าน'?'#dcfce7':'#fee2e2';
