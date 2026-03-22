@@ -165,7 +165,7 @@ async function loadAllClubStudents() {
   }
 
   const t       = Club.term;
-  const classes = [...new Set(CONFIG.ALL_CLS.map(c => c.replace(/ เทอม [12]/g, '').trim()))];
+  const classes = CONFIG.ALL_CLS; // ไม่มี เทอม ใน ALL_CLS แล้ว
 
   Utils.showLoading('โหลดรายชื่อทุกชั้น...');
   try {
@@ -243,7 +243,7 @@ async function loadSavedClub() {
   const year = $('gYear').value;
   if (!year) { Utils.toast('กรุณาเลือกปีการศึกษาก่อน', 'error'); return; }
   const t = Club.term;
-  const classes = [...new Set(CONFIG.ALL_CLS.map(c => c.replace(/ เทอม [12]/g, '').trim()))];
+  const classes = CONFIG.ALL_CLS; // ไม่มี เทอม ใน ALL_CLS แล้ว
 
   // ป้องกันกดซ้อน
   if (document.getElementById('btnLoadSaved')) document.getElementById('btnLoadSaved').disabled = true;
@@ -581,7 +581,7 @@ function _renderClubMain() {
 // ── tab เลือกนักเรียน ────────────────────────────────
 function _renderClubStudentPicker() {
   const wrap = $('clubStudentPicker'); if (!wrap) return;
-  const classes   = [...new Set(CONFIG.ALL_CLS.map(c => c.replace(/ เทอม [12]/g, '').trim()))];
+  const classes   = CONFIG.ALL_CLS;
   const activeCls = Club.activeClassTab || classes[0];
 
   const tabsHtml = classes.map(cls => {
