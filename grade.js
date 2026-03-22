@@ -992,15 +992,16 @@ async function saveGrades() {
   const subj = App.loadedSubject;
   const cls  = App.loadedClass || $('gClass').value;
   const year = App.loadedYear  || $('gYear').value;
-  const t    = App.activeTerm  || 1;
+  const t    = (App.activeTerm === 0) ? 1 : (App.activeTerm || 1); // ไม่บันทึกในหน้าทั้งปี
 
   if (!subj) return Utils.toast('กรุณาเลือกวิชาก่อนบันทึก', 'error');
+  if (App.activeTerm === 0) return Utils.toast('ไม่สามารถบันทึกในหน้าทั้งปีได้', 'error');
 
   const tgt = ScoreLogic.getTarget();
   if (ScoreLogic.getUnitsMax(t) > tgt)
     return Utils.toast(`เทอม ${t}: คะแนนรวมหน่วยเกิน ${tgt}`, 'error');
 
-  // snapshot สำหรับเทอมที่ไม่ได้แสดง (เพื่อไม่เขียนทับ)
+  // snapshot ของเทอมที่แสดงอยู่ (ใช้ merge DOM + snapshot)
   const stuMap = {};
   (App.students || []).forEach(s => { stuMap[s.studentId] = s.grades || {}; });
 
@@ -1010,30 +1011,50 @@ async function saveGrades() {
     const snap = stuMap[sid] || {};
     const other = t === 1 ? 2 : 1;
 
-    // อ่านค่าจาก DOM ของเทอมที่แสดงอยู่
-    const subVals = [...tr.querySelectorAll(`.sub${t}`)].map(i => i.value);
+    // ── รวบรวม sub values ของเทอม t โดย merge DOM + snapshot ──
+    // snapshot ปัจจุบันของ t1_sub/t2_sub
+    const snapSub = Array.isArray(snap[`t${t}_sub`]) ? [...snap[`t${t}_sub`]] : [];
+    // อัปเดตจาก DOM inputs ที่มีอยู่ (อาจเป็นแค่หน่วยเดียว)
+    [...tr.querySelectorAll(`.sub${t}`)].forEach(inp => {
+      const unitIdx = Number(inp.dataset.unit);
+      const itemIdx = Number(inp.dataset.item);
+      const offset  = ScoreLogic.getUnitOffsets(t).find(o => o.unitIndex === unitIdx);
+      if (offset) {
+        const flatIdx = offset.start + itemIdx;
+        if (flatIdx < snapSub.length) snapSub[flatIdx] = inp.value;
+        else { while (snapSub.length <= flatIdx) snapSub.push(''); snapSub[flatIdx] = inp.value; }
+      }
+    });
+    const subVals = snapSub;
     const acc     = ScoreLogic.calcKeepFromFlat(t, subVals);
-    const examEl  = tr.querySelector(`input[data-term="${t}"][data-type="exam"]`);
 
-    // exam sub items flat values
+    // ── exam ──
+    const examEl       = tr.querySelector(`input[data-term="${t}"][data-type="exam"]`);
     const examSubInputs = [...tr.querySelectorAll(`.exam-sub${t}`)];
-    const examSubVals   = examSubInputs.map(i => i.value);
-    const examVal = examSubInputs.length > 0
+    // รวบรวม exam sub flat โดย merge DOM + snapshot
+    const snapExamSub = Array.isArray(snap[`t${t}_exam_sub`]) ? [...snap[`t${t}_exam_sub`]] : [];
+    examSubInputs.forEach((inp, i) => {
+      const fi = Number(inp.dataset.examflatidx ?? i);
+      if (fi < snapExamSub.length) snapExamSub[fi] = inp.value;
+      else { while (snapExamSub.length <= fi) snapExamSub.push(''); snapExamSub[fi] = inp.value; }
+    });
+    const examSubVals = snapExamSub;
+    const examVal = examSubVals.length > 0
       ? String(ScoreLogic.calcExamScaled(t, examSubVals.map(v => Number(v)||0)))
-      : (examEl ? examEl.value : '');
+      : (examEl ? examEl.value : (snap[`t${t}_exam`] ?? ''));
 
-    // ใช้ snapshot สำหรับเทอมอื่น
-    const oAcc  = Number(snap[`t${other}_acc`])  || 0;
-    const oExam = snap[`t${other}_exam`]  ?? '';
-    const oSub  = Array.isArray(snap[`t${other}_sub`]) ? snap[`t${other}_sub`] : [];
+    // ── เทอมอื่น: ใช้ snapshot ล้วน ──
+    const oAcc      = Number(snap[`t${other}_acc`])  || 0;
+    const oExam     = snap[`t${other}_exam`]  ?? '';
+    const oSub      = Array.isArray(snap[`t${other}_sub`])      ? snap[`t${other}_sub`]      : [];
+    const oExamSub  = Array.isArray(snap[`t${other}_exam_sub`]) ? snap[`t${other}_exam_sub`] : [];
 
     records.push(t === 1
       ? { studentId: sid, t1_sub: subVals, t1_acc: acc, t1_exam: examVal, t1_exam_sub: examSubVals,
-          t2_sub: oSub, t2_acc: oAcc, t2_exam: oExam, t2_exam_sub: snap.t2_exam_sub || [] }
-      : { studentId: sid, t1_sub: oSub, t1_acc: oAcc, t1_exam: oExam, t1_exam_sub: snap.t1_exam_sub || [],
+          t2_sub: oSub, t2_acc: oAcc, t2_exam: oExam, t2_exam_sub: oExamSub }
+      : { studentId: sid, t1_sub: oSub, t1_acc: oAcc, t1_exam: oExam, t1_exam_sub: oExamSub,
           t2_sub: subVals, t2_acc: acc, t2_exam: examVal, t2_exam_sub: examSubVals }
     );
-  });
 
   if (!records.length) return Utils.toast('ยังไม่มีข้อมูล', 'warning');
 
