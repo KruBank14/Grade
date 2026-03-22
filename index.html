@@ -1253,6 +1253,24 @@ body{
 }
 
 .subject-overview-card{padding:16px;border:1px solid #dbeafe;background:linear-gradient(180deg,#ffffff,#f8fbff);}
+
+/* ── Subject Manager ── */
+.sm-row{display:flex;align-items:center;gap:8px;padding:9px 12px;background:#fff;border:1.5px solid #e2e8f0;border-radius:10px;font-size:.84rem;transition:border-color .15s,box-shadow .15s;flex-wrap:wrap;}
+.sm-row:hover{border-color:#a78bfa;box-shadow:0 2px 8px rgba(99,102,241,.08);}
+.sm-drag{color:#94a3b8;cursor:grab;font-size:1.1rem;line-height:1;user-select:none;padding:2px 0;}
+.sm-drag:active{cursor:grabbing;}
+.sm-num{color:#94a3b8;font-size:.75rem;font-weight:700;min-width:20px;text-align:center;}
+.sm-name{font-weight:700;color:#1e293b;flex:1;min-width:120px;}
+.sm-badge{display:inline-flex;align-items:center;gap:3px;padding:2px 9px;border-radius:50px;font-size:.72rem;font-weight:800;white-space:nowrap;flex-shrink:0;}
+.sm-badge.year{background:#dcfce7;color:#15803d;border:1px solid #bbf7d0;}
+.sm-badge.seq{background:#ede9fe;color:#6d28d9;border:1px solid #ddd6fe;}
+.sm-hint{font-size:.72rem;color:#94a3b8;white-space:nowrap;flex-shrink:0;}
+.sm-actions{display:flex;gap:5px;margin-left:auto;flex-shrink:0;}
+.sm-btn-type{padding:3px 9px;border:1.5px solid #e2e8f0;border-radius:7px;background:#f8fafc;color:#475569;font-size:.72rem;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;transition:all .12s;}
+.sm-btn-type:hover{border-color:#6366f1;color:#6366f1;background:#eef2ff;}
+.sm-btn-del{padding:3px 8px;border:1.5px solid #fecaca;border-radius:7px;background:#fff1f2;color:#ef4444;font-size:.8rem;cursor:pointer;font-family:inherit;transition:all .12s;}
+.sm-btn-del:hover{background:#fee2e2;border-color:#ef4444;}
+@media(max-width:600px){.sm-name{min-width:80px;}.sm-btn-type{display:none;}}
 .subject-overview-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;}
 .overview-item{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:12px;min-height:78px;}
 .overview-label{font-size:.76rem;color:var(--muted);margin-bottom:4px;font-weight:700;}
@@ -1405,6 +1423,73 @@ body{
           </thead>
           <tbody id="tTbody"></tbody>
         </table>
+      </div>
+    </div>
+
+    <!-- ===== จัดการรายวิชาแต่ละชั้น ===== -->
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:6px;">
+        <div style="font-weight:800;font-size:.97rem;">📚 จัดการรายวิชาแต่ละชั้นเรียน</div>
+        <button class="nbtn" onclick="toggleSubjectManager()" style="border-color:#6366f1;color:#6366f1;">
+          ⚙️ เปิด/ปิด
+        </button>
+      </div>
+      <div style="color:var(--muted);font-size:.8rem;margin-bottom:8px;">
+        กำหนดว่าวิชาไหน <b>มีทั้งปี</b> (แสดงทุกเทอม) หรือ <b>วิชาต่อเนื่อง</b> (เลขคี่=เทอม 1, เลขคู่=เทอม 2)
+      </div>
+
+      <div id="smPanel" style="display:none;">
+        <!-- Selector -->
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
+          <div class="sg">
+            <label>ชั้นเรียน</label>
+            <select id="smClassSel" class="form-select" style="min-width:120px;" onchange="smChangeClass(this.value)"></select>
+          </div>
+          <button id="smSaveBtn" class="btn-pri"
+            style="opacity:.5;background:linear-gradient(135deg,#16a34a,#15803d);align-self:flex-end;"
+            onclick="SubjectMgr.save()">
+            💾 บันทึก
+          </button>
+        </div>
+
+        <!-- Legend -->
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center;">
+          <span class="sm-badge year">📅 ทั้งปี</span>
+          <span style="font-size:.78rem;color:var(--muted);">แสดงทั้ง 2 เทอม</span>
+          <span style="color:#cbd5e1;padding:0 4px;">|</span>
+          <span class="sm-badge seq">🔢 ต่อเนื่อง</span>
+          <span style="font-size:.78rem;color:var(--muted);">เลขคี่=เทอม 1, เลขคู่=เทอม 2</span>
+        </div>
+
+        <!-- Subject list -->
+        <div id="smSubjectList" style="display:flex;flex-direction:column;gap:4px;margin-bottom:14px;"></div>
+
+        <!-- Add new -->
+        <div style="background:#f8fafc;border:1.5px dashed #c7d2fe;border-radius:12px;padding:14px;margin-top:8px;">
+          <div style="font-weight:800;font-size:.84rem;color:#4338ca;margin-bottom:10px;">➕ เพิ่มวิชาใหม่</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+            <div class="sg" style="flex:1;min-width:160px;">
+              <label>ชื่อวิชา</label>
+              <input type="text" id="smNewName" class="form-control" placeholder="เช่น ภาษาไทย หรือ เทคโนโลยี"
+                style="min-height:38px;" onkeydown="if(event.key==='Enter') SubjectMgr.addSubject()">
+            </div>
+            <div class="sg">
+              <label>ประเภท</label>
+              <select id="smNewType" class="form-select" style="min-width:170px;min-height:38px;">
+                <option value="yearly">📅 ทั้งปี (ไม่มีเลขท้าย)</option>
+                <option value="sequence">🔢 ต่อเนื่อง (มีเลขท้าย)</option>
+              </select>
+            </div>
+            <button class="btn-pri" onclick="SubjectMgr.addSubject()"
+              style="background:linear-gradient(135deg,#6366f1,#4338ca);align-self:flex-end;">
+              ➕ เพิ่ม
+            </button>
+          </div>
+          <div style="font-size:.75rem;color:var(--muted);margin-top:8px;line-height:1.7;">
+            💡 <b>ทั้งปี</b> = วิชาเดียวแสดงทุกเทอม (เช่น ภาษาไทย, คณิตศาสตร์)<br>
+            💡 <b>ต่อเนื่อง</b> = สร้าง 2 วิชาอัตโนมัติ เช่น "เทคโนโลยี 1" (เทอม 1) + "เทคโนโลยี 2" (เทอม 2)
+          </div>
+        </div>
       </div>
     </div>
 
@@ -2062,6 +2147,7 @@ body{
 <script src="config.js"></script>
 <script src="auth.js"></script>
 <script src="admin.js"></script>
+<script src="subject-manager.js"></script>
 <script src="grade.js"></script>
 <script src="holistic.js"></script>
 <script src="print.js"></script>
